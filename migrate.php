@@ -28,13 +28,17 @@ echo "    Engine: v2.1 (SSL/TLS Encrypted Transport)                         \n"
 echo "========================================================================\n\n";
 
 // 1. Resolve Database Credentials from Environment
-$host = getenv('DB_HOST') ?: '127.0.0.1';
-$port = getenv('DB_PORT') ?: 3306;
-$database = getenv('DB_DATABASE') ?: 'smart_school';
-$username = getenv('DB_USERNAME') ?: 'root';
-$password = getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '';
+$host = trim(getenv('DB_HOST') ?: '127.0.0.1');
+$port = trim(getenv('DB_PORT') ?: 3306);
+$database = trim(getenv('DB_DATABASE') ?: 'test');
+$username = trim(getenv('DB_USERNAME') ?: 'root');
+$password = getenv('DB_PASSWORD') !== false ? trim(getenv('DB_PASSWORD')) : '';
 
-echo "Target Database: {$database} on {$host}:{$port} (User: {$username})\n";
+$masked_pw = strlen($password) > 4 ? substr($password, 0, 2) . '****' . substr($password, -2) : '****';
+echo "Target Host    : {$host}:{$port}\n";
+echo "Target User    : {$username}\n";
+echo "Password Info  : Length " . strlen($password) . " (" . $masked_pw . ")\n";
+echo "Target Database: {$database}\n\n";
 
 // 2. Locate SQL Dump File
 $sql_files = [
@@ -56,37 +60,65 @@ if (!$sql_path) {
 
 echo "Found SQL Dump: " . basename($sql_path) . " (" . round(filesize($sql_path) / 1024, 2) . " KB)\n";
 
-// 3. Connect via PDO MySQL with TLS/SSL Transport
-try {
-    echo "Connecting to MySQL server with SSL/TLS...\n";
-    $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
-    
-    $pdo_options = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_TIMEOUT            => 10,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-    ];
+// 3. Connect via PDO MySQL with TLS/SSL Transport & Auto-Fallbacks
+$pdo = null;
+$connection_errors = [];
 
-    // Force TLS/SSL transport for cloud MySQL providers (TiDB Serverless, Aiven, etc.)
-    $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
-    if (file_exists($ca_bundle)) {
-        $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
-    } else {
-        $pdo_options[PDO::MYSQL_ATTR_SSL_CAPATH] = '/etc/ssl/certs';
-    }
-    if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
-        $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-    }
+$db_candidates = array_unique(array_filter([$database, '', 'test', 'sys']));
 
-    $pdo = new PDO($dsn, $username, $password, $pdo_options);
-    echo "Successfully connected to MySQL database: {$database}\n\n";
-} catch (PDOException $e) {
+foreach ($db_candidates as $db_target) {
+    try {
+        $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+        if (!empty($db_target)) {
+            $dsn .= ";dbname={$db_target}";
+            echo "Attempting connection to database '{$db_target}' with SSL...\n";
+        } else {
+            echo "Attempting connection to server root with SSL...\n";
+        }
+        
+        $pdo_options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_TIMEOUT            => 10,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+        ];
+
+        // Force TLS/SSL transport for cloud MySQL providers (TiDB Serverless, Aiven, etc.)
+        $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
+        if (file_exists($ca_bundle)) {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
+        } else {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_CAPATH] = '/etc/ssl/certs';
+        }
+        if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+        }
+
+        $pdo = new PDO($dsn, $username, $password, $pdo_options);
+        echo "Successfully connected to MySQL" . (!empty($db_target) ? " database '{$db_target}'" : "") . "!\n\n";
+
+        // Select or create target database
+        $target_to_use = !empty($database) ? $database : 'test';
+        try {
+            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$target_to_use}`; USE `{$target_to_use}`;");
+            echo "Active database set to: `{$target_to_use}`\n";
+        } catch (Exception $e) {
+            try {
+                $pdo->exec("USE `{$target_to_use}`;");
+            } catch (Exception $e2) {}
+        }
+        break;
+    } catch (PDOException $e) {
+        $connection_errors[] = ($db_target ?: '(server root)') . ': ' . $e->getMessage();
+    }
+}
+
+if (!$pdo) {
     echo "ERROR: Failed to connect to MySQL database.\n";
-    echo "Details: " . $e->getMessage() . "\n\n";
-    echo "Please verify that your DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, and DB_PASSWORD\n";
-    echo "environment variables in the Render Dashboard are correct and that the remote MySQL\n";
-    echo "instance allows incoming connections from Render.\n";
+    foreach ($connection_errors as $err) {
+        echo " Details: " . $err . "\n";
+    }
+    echo "\nPlease verify your DB_HOST, DB_PORT, DB_USERNAME, and DB_PASSWORD in Render.\n";
     exit(1);
 }
 

@@ -17,11 +17,11 @@ function &DB($params = '', bool $query_builder_override = NULL) {
     $active_group = $active_group ?? 'default';
     $db_config = $db[$active_group] ?? [];
 
-    $host = getenv('DB_HOST') ?: ($db_config['hostname'] ?? '127.0.0.1');
-    $port = getenv('DB_PORT') ?: ($db_config['port'] ?? '3306');
-    $database = getenv('DB_DATABASE') ?: ($db_config['database'] ?? 'smart_school');
-    $username = getenv('DB_USERNAME') ?: ($db_config['username'] ?? 'root');
-    $password = getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : ($db_config['password'] ?? '0');
+    $host = trim(getenv('DB_HOST') ?: ($db_config['hostname'] ?? '127.0.0.1'));
+    $port = trim(getenv('DB_PORT') ?: ($db_config['port'] ?? '3306'));
+    $database = trim(getenv('DB_DATABASE') ?: ($db_config['database'] ?? 'test'));
+    $username = trim(getenv('DB_USERNAME') ?: ($db_config['username'] ?? 'root'));
+    $password = getenv('DB_PASSWORD') !== false ? trim(getenv('DB_PASSWORD')) : ($db_config['password'] ?? '0');
     $driver = $db_config['dbdriver'] ?? 'pdo';
 
     $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
