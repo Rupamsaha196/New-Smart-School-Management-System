@@ -27,12 +27,12 @@ echo "    INFOSOF TECHNOLOGIES 2026 - MYSQL 8 / RENDER CLOUD DEPLOYMENT      \n"
 echo "    Engine: v2.1 (SSL/TLS Encrypted Transport)                         \n";
 echo "========================================================================\n\n";
 
-// 1. Resolve Database Credentials from Environment
-$host = trim(getenv('DB_HOST') ?: '127.0.0.1');
-$port = trim(getenv('DB_PORT') ?: 3306);
-$database = trim(getenv('DB_DATABASE') ?: 'test');
-$username = trim(getenv('DB_USERNAME') ?: 'root');
-$password = getenv('DB_PASSWORD') !== false ? trim(getenv('DB_PASSWORD')) : '';
+// 1. Resolve Database Credentials from Environment (or URL query override)
+$host     = trim($_GET['db_host'] ?? (getenv('DB_HOST') ?: '127.0.0.1'));
+$port     = trim($_GET['db_port'] ?? (getenv('DB_PORT') ?: 3306));
+$database = trim($_GET['db_name'] ?? (getenv('DB_DATABASE') ?: 'test'));
+$username = trim($_GET['db_user'] ?? (getenv('DB_USERNAME') ?: 'root'));
+$password = trim($_GET['db_pass'] ?? (getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : ''));
 
 $masked_pw = strlen($password) > 4 ? substr($password, 0, 2) . '****' . substr($password, -2) : '****';
 echo "Target Host    : {$host}:{$port}\n";
