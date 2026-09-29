@@ -19,7 +19,7 @@ backend/.phpunit.result.cache
 backend/public/storage
 backend/database/database.sqlite
 
-# ── Frontend (React/Vite) ─────────────────────────────────────────────
+# ── Frontend (HTML/CSS/JS) ─────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
 frontend/.env

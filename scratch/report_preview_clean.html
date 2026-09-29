@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart School Management System - Project Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 18mm 14mm;
+  }
+  
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 12.5px;
+    background: #ffffff;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Cover Page */
+  .cover-page {
+    page-break-after: always;
+    min-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 30px 15px 15px 15px;
+    border-bottom: 3px solid #2563eb;
+  }
+
+  .cover-badge {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 20px;
+    border: 1px solid #bfdbfe;
+  }
+
+  .cover-title {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #0f172a;
+    margin: 0 0 14px 0;
+    letter-spacing: -0.02em;
+  }
+
+  .cover-subtitle {
+    font-size: 18px;
+    font-weight: 500;
+    color: #475569;
+    margin: 0 0 28px 0;
+  }
+
+  .cover-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 30px;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .meta-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #64748b;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+  }
+
+  .meta-val {
+    font-size: 13px;
+    color: #0f172a;
+    font-weight: 600;
+  }
+
+  .cover-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 15px;
+    color: #64748b;
+    font-size: 10.5px;
+  }
+
+  /* Content typography */
+  h1 {
+    font-size: 24px;
+    color: #0f172a;
+    font-weight: 800;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 30px;
+    margin-bottom: 14px;
+    page-break-after: avoid;
+  }
+
+  h2 {
+    font-size: 18px;
+    color: #1e3a8a;
+    font-weight: 700;
+    border-bottom: 1.5px solid #cbd5e1;
+    padding-bottom: 5px;
+    margin-top: 26px;
+    margin-bottom: 12px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h3 {
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 700;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h4 {
+    font-size: 12.5px;
+    color: #334155;
+    font-weight: 700;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+  }
+
+  p {
+    margin: 0 0 10px 0;
+    color: #334155;
+    text-align: justify;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 11.5px;
+    background: #ffffff;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  th {
+    background-color: #1e293b;
+    color: #f8fafc;
+    font-weight: 600;
+    text-align: left;
+    padding: 7px 10px;
+    border: 1px solid #334155;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  td {
+    padding: 6px 10px;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+  }
+
+  tr:nth-child(even) td {
+    background-color: #f8fafc;
+  }
+
+  /* Code blocks & ASCII art */
+  pre {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 10.5px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.4;
+    margin: 12px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 10.5px;
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 5px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+  }
+
+  pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    border: none;
+  }
+
+  /* Mermaid Diagrams Container */
+  .mermaid-wrapper {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin: 16px 0;
+    text-align: center;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .mermaid {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+  }
+
+  .mermaid svg {
+    max-width: 98% !important;
+    height: auto !important;
+  }
+
+  /* Blockquotes / Callout Alerts */
+  blockquote {
+    margin: 14px 0;
+    padding: 10px 14px;
+    border-left: 4px solid #3b82f6;
+    background-color: #eff6ff;
+    color: #1e40af;
+    border-radius: 0 6px 6px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  blockquote p {
+    margin: 0;
+    color: inherit;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 20px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- Cover Page -->
+<div class="cover-page">
+  <div class="cover-header">
+    <div class="cover-badge">Official Architecture & Engineering Documentation</div>
+    <div class="cover-title">Smart School Management System</div>
+    <div class="cover-subtitle">Complete System Architecture, Flowcharts, Database Entity-Relationship Specification & Module Index</div>
+  </div>
+
+  <div class="cover-meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">Project Version</span>
+      <span class="meta-val">v1.5 (Production Ready)</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Release Date</span>
+      <span class="meta-val">September 29, 2026</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Technology Stack</span>
+      <span class="meta-val">Vanilla JS SPA + CodeIgniter 3.x + MySQL 8.x</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Modules & Tables</span>
+      <span class="meta-val">45 Modules / 56 Relational Tables</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Developed By</span>
+      <span class="meta-val">Infosof Technologies</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Target Deployment</span>
+      <span class="meta-val">cPanel Shared Hosting / Linux VPS</span>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>Institution: Smart School International, Kolkata</span>
+    <span>CONFIDENTIAL & PROPRIETARY — ALL RIGHTS RESERVED</span>
+  </div>
+</div>
+
+<div class="report-content" id="report-container"></div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    themeVariables: {
+      fontFamily: 'Inter, sans-serif',
+      fontSize: '11px',
+      primaryColor: '#eff6ff',
+      primaryBorderColor: '#3b82f6',
+      primaryTextColor: '#1e3a8a',
+      lineColor: '#64748b'
+    },
+    flowchart: { curve: 'basis', htmlLabels: true },
+    er: { useMaxWidth: true }
+  });
+
+  const rawMarkdown = "# Smart School Management System\n## Comprehensive Project Report\n### Infosof Technologies | Academic Year 2026–27\n\n---\n\n> [!IMPORTANT]\n> **Project:** Smart School Management System  \n> **Version:** 1.5 (September 2026)  \n> **Stack:** HTML/CSS/Vanilla JS (SPA) + CodeIgniter 3.x (REST API) + MySQL 8.x  \n> **Developer:** Infosof Technologies  \n> **Institution:** Smart School International, Kolkata\n\n---\n\n## Table of Contents\n\n1. [Executive Summary](#1-executive-summary)\n2. [Technology Stack](#2-technology-stack)\n3. [System Architecture](#3-system-architecture)\n4. [Application Working Flow](#4-application-working-flow)\n5. [Module Flowcharts](#5-module-flowcharts)\n6. [Database ER Diagram](#6-database-er-diagram)\n7. [Role-Based Access Control (RBAC)](#7-role-based-access-control-rbac)\n8. [API Architecture](#8-api-architecture)\n9. [Module Catalogue (45 Modules)](#9-module-catalogue-45-modules)\n10. [Key Design Decisions](#10-key-design-decisions)\n11. [Deployment Architecture](#11-deployment-architecture)\n\n---\n\n## 1. Executive Summary\n\nSmart School is a **full-stack, web-based school management system** that digitises and centralises all administrative, academic, financial, and operational workflows of a school. It supports **six user roles** (Super Admin, Admin, Teacher, Accountant, Parent, Student), provides a **REST JSON API backend** powered by CodeIgniter 3, and a **SPA (Single Page Application) frontend** written in plain HTML/CSS/JavaScript.\n\n### Key Highlights\n| Metric | Value |\n|--------|-------|\n| Total Modules | **45** |\n| Database Tables | **56** |\n| User Roles | **6** (Super Admin, Admin, Teacher, Accountant, Librarian, Receptionist, Parent, Student) |\n| API Endpoints | **45+** |\n| Payment Gateway | Razorpay (Online + Offline) |\n| Attendance Modes | Manual + QR Code Scan |\n| Deployment Target | cPanel Shared Hosting / VPS |\n\n---\n\n## 2. Technology Stack\n\n```\n┌────────────────────────────────────────────────────────────────────┐\n│                        TECHNOLOGY STACK                            │\n├───────────────┬────────────────────────────────────────────────────┤\n│  Layer        │  Technology                                        │\n├───────────────┼────────────────────────────────────────────────────┤\n│  Frontend UI  │  HTML5, Vanilla CSS3, Vanilla JavaScript (ES2020)  │\n│  SPA Router   │  Hash-based routing (#/path) in app.js             │\n│  State Store  │  window.SS_STORE (localStorage reactive engine)    │\n│  RBAC         │  window.canManage() — token-based role check       │\n│  Backend API  │  PHP 8.3 + CodeIgniter 3.x (REST JSON API)         │\n│  Database     │  MySQL 8.x — 56 tables, InnoDB, utf8mb4            │\n│  Payment      │  Razorpay SDK (test + live mode)                   │\n│  Web Server   │  Apache 2.4 with mod_rewrite (.htaccess)           │\n│  Dev Server   │  Node.js static file server (port 5500)            │\n│  PHP Server   │  PHP built-in server (port 8000 for API)           │\n└───────────────┴────────────────────────────────────────────────────┘\n```\n\n---\n\n## 3. System Architecture\n\n```mermaid\ngraph TB\n    subgraph CLIENT[\"🖥️ Client (Browser — Port 5500)\"]\n        UI[index.html Entry Point]\n        STORE[store.js — Reactive Store + canManage]\n        ROUTER[app.js — Hash SPA Router]\n        V1[views-students.js]\n        V2[views-academics.js]\n        V3[views-attendance.js]\n        V4[views-exams.js]\n        V5[views-finance.js]\n        V6[views-staff.js]\n        V7[views-operations.js]\n        V8[views-reports.js]\n        V9[views-settings.js]\n    end\n\n    subgraph API[\"⚙️ REST API (CodeIgniter 3 — Port 8000)\"]\n        direction TB\n        CI_ROUTER[index.php → CI Router]\n        AUTH[Auth.php — Login/2FA/JWT]\n        STUDENTS[Students.php]\n        ACADEMICS[Academics.php]\n        ATTENDANCE[Attendance.php]\n        EXAMS[Exams.php]\n        FEES[Fees.php]\n        FINANCE[Finance.php]\n        STAFF[Staff.php]\n        OPERATIONS[Operations.php]\n        RAZORPAY[Razorpay.php]\n        SETTINGS[Settings.php]\n        REPORTS[Reports.php]\n    end\n\n    subgraph DB[\"🗄️ MySQL 8 Database\"]\n        direction TB\n        DB_USERS[(users)]\n        DB_STUDENTS[(students)]\n        DB_STAFF[(staff)]\n        DB_FEES[(student_fees)]\n        DB_ATTEND[(attendances)]\n        DB_LIBRARY[(library_books / book_issues)]\n        DB_EXAMS[(exams / exam_results)]\n        DB_MISC[(45+ other tables)]\n    end\n\n    UI --> STORE\n    UI --> ROUTER\n    ROUTER --> V1 & V2 & V3 & V4 & V5 & V6 & V7 & V8 & V9\n    V1 & V2 & V3 & V4 & V5 & V6 & V7 & V8 & V9 -->|\"fetch() JSON API calls\"| CI_ROUTER\n    CI_ROUTER --> AUTH & STUDENTS & ACADEMICS & ATTENDANCE & EXAMS & FEES & FINANCE & STAFF & OPERATIONS & RAZORPAY & SETTINGS & REPORTS\n    AUTH & STUDENTS & ACADEMICS & ATTENDANCE & EXAMS & FEES & FINANCE & STAFF & OPERATIONS --> DB_USERS & DB_STUDENTS & DB_STAFF & DB_FEES & DB_ATTEND & DB_LIBRARY & DB_EXAMS & DB_MISC\n```\n\n### File Structure\n\n```\nSmart-School-Management-System/\n├── frontend/                          ← SPA Frontend\n│   ├── index.html                     ← Entry point (loads all scripts)\n│   ├── css/\n│   │   └── style.css                  ← Complete design system\n│   ├── js/\n│   │   ├── store.js                   ← Reactive store, canManage(), modal engine\n│   │   ├── app.js                     ← SPA router, auth, API client, nav\n│   │   ├── views-students.js          ← Students, Admission, TC, Credentials\n│   │   ├── views-academics.js         ← Calendar, Downloads, Timetable, Live Classes\n│   │   ├── views-attendance.js        ← Mark, QR, Report\n│   │   ├── views-exams.js             ← Exams, Marks Entry, Admit Cards\n│   │   ├── views-finance.js           ← Fees, Payroll, Accounts, Razorpay\n│   │   ├── views-staff.js             ← Staff directory, Leave, Payslips\n│   │   ├── views-operations.js        ← Library, Transport, Hostel, Notices\n│   │   ├── views-reports.js           ← Analytics and Reports\n│   │   └── views-settings.js          ← School settings, RBAC, Custom Fields\n│   └── assets/\n│       └── favicon.jpg\n│\n├── backend_codeigniter/               ← REST API Backend\n│   └── application/\n│       ├── controllers/               ← 15 controllers\n│       ├── models/                    ← 10 models\n│       └── config/\n│           ├── database.php           ← MySQL connection\n│           └── routes.php             ← API route mappings\n│\n├── database/\n│   └── smart_school_database_cpanel_2026.sql  ← Full DB dump (56 tables)\n│\n├── index.php                          ← Apache root → CI bootstrap\n├── .htaccess                          ← mod_rewrite rules\n└── .env.example                       ← Environment config template\n```\n\n---\n\n## 4. Application Working Flow\n\n### 4.1 Authentication Flow\n\n```mermaid\nflowchart TD\n    A([User Opens Browser]) --> B[Load index.html]\n    B --> C[store.js loads → defines window.canManage]\n    C --> D[app.js loads → defines auth, api, router]\n    D --> E{Hash Route?}\n    E -->|\"#/login or no hash\"| F[Render Login Form]\n    E -->|\"#/dashboard etc\"| G{localStorage user token?}\n    G -->|No token| F\n    G -->|Has token| H[Validate token with API]\n    H -->|Invalid| F\n    H -->|Valid| I[Load Dashboard]\n\n    F --> J[User enters email + password]\n    J --> K[\"POST /api/auth/login\"]\n    K --> L{2FA Enabled?}\n    L -->|Yes| M[Show OTP Challenge]\n    M --> N[\"POST /api/auth/2fa-verify\"]\n    N --> O{OTP Valid?}\n    O -->|No| M\n    O -->|Yes| P[Store token + user in localStorage]\n    L -->|No| P\n    P --> I\n\n    I --> Q[Build sidebar nav based on role]\n    Q --> R[User navigates via sidebar/hash]\n    R --> S[Router matches hash → renders view]\n    S --> T[\"View calls api.get/post()\"]\n    T --> U[\"API attaches Bearer token header\"]\n    U --> V[\"CI Backend validates token\"]\n    V --> W[Return JSON data]\n    W --> X[View renders DOM]\n```\n\n### 4.2 SPA Navigation Flow\n\n```mermaid\nflowchart LR\n    A[User clicks nav item] --> B[\"window.location.hash = '#/route'\"]\n    B --> C[\"hashchange event fires\"]\n    C --> D[\"router() function in app.js\"]\n    D --> E[\"Matches route in routeMap\"]\n    E --> F[\"Calls viewFn() — async function\"]\n    F --> G[\"Fetches data from API\"]\n    G --> H[\"Returns HTML template string\"]\n    H --> I[\"document.getElementById('app').innerHTML = html\"]\n    I --> J[\"attachEventListeners()\"]\n    J --> K[UI is live and interactive]\n```\n\n---\n\n## 5. Module Flowcharts\n\n### 5.1 Fee Collection Flow (with Razorpay)\n\n```mermaid\nflowchart TD\n    A([Admin/Accountant opens Fee Module]) --> B[\"Load student fee ledger via GET /api/fees\"]\n    B --> C{Payment mode?}\n    C -->|Cash/Cheque/DD| D[Fill amount + receipt modal]\n    D --> E[\"POST /api/fees/collect — offline\"]\n    E --> F[Generate PDF receipt]\n    F --> G([Mark Paid ✓])\n\n    C -->|Online via Razorpay| H[\"POST /api/razorpay/create-order\"]\n    H --> I[Razorpay order_id returned]\n    I --> J[Open Razorpay payment widget in browser]\n    J --> K{Payment successful?}\n    K -->|Yes| L[\"Razorpay callback → POST /api/razorpay/verify\"]\n    L --> M[Signature verification HMAC-SHA256]\n    M -->|Valid| N[Update student_fees status=Paid]\n    N --> O[Send WhatsApp receipt notification]\n    O --> G\n    K -->|Failed| P([Show error toast])\n    M -->|Invalid| P\n```\n\n### 5.2 Library Book Issue & Return Flow\n\n```mermaid\nflowchart TD\n    A([Librarian/Teacher opens Library]) --> B[\"GET /api/library/books\"]\n    B --> C[Display catalogue with stock counts]\n    C --> D{Action?}\n\n    D -->|\"Add Book\"| E[Fill title, author, ISBN, qty modal]\n    E --> F[\"POST /api/library/books\"]\n    F --> G[Insert into library_books]\n    G --> H[Update stat cards: Total, Available, Issued]\n    H --> C\n\n    D -->|\"Issue Book\"| I[Select book + student modal]\n    I --> J[\"POST /api/library/issues\"]\n    J --> K[Insert into book_issues]\n    K --> L[\"UPDATE library_books SET available_qty = available_qty - 1\"]\n    L --> H\n\n    D -->|\"Return Book\"| M[\"POST /api/library/return {issue_id}\"]\n    M --> N[\"UPDATE book_issues SET status=Returned, return_date=today\"]\n    N --> O[\"UPDATE library_books SET available_qty = available_qty + 1\"]\n    O --> H\n```\n\n### 5.3 Attendance Flow (Manual + QR)\n\n```mermaid\nflowchart TD\n    A([Teacher opens Attendance]) --> B{Mode?}\n\n    B -->|Manual| C[\"GET /api/students for class roster\"]\n    C --> D[Display student list with toggle buttons]\n    D --> E[Teacher marks P/A/L/H for each student]\n    E --> F[\"POST /api/attendance/save\"]\n    F --> G[\"Bulk INSERT into attendances table\"]\n    G --> H[Show attendance report cards]\n\n    B -->|QR Code| I[Generate unique QR per student: ID + name]\n    I --> J[Student scans QR with device]\n    J --> K[\"POST /api/attendance/qr-scan\"]\n    K --> L[\"INSERT into qr_attendance_logs\"]\n    L --> M[Show live scan log on screen]\n```\n\n### 5.4 Exam & Marks Flow\n\n```mermaid\nflowchart TD\n    A([Admin creates Exam]) --> B[\"POST /api/exams → INSERT into exams\"]\n    B --> C[\"POST /api/exams/schedule → INSERT exam_schedules\"]\n    C --> D[Exam scheduled with date, class, subject, room]\n    D --> E[\"Print Admit Cards via GET /api/exams/admit-cards\"]\n\n    E --> F([Exam Date Arrives])\n    F --> G[Teacher opens Marks Entry]\n    G --> H[\"GET /api/students for class\"]\n    H --> I[Fill marks for each student per subject]\n    I --> J[\"POST /api/exams/marks → INSERT exam_results\"]\n    J --> K[Auto-calculate grade + pass/fail]\n    K --> L[\"GET /api/reports/performance\"]\n    L --> M[Generate performance analytics charts]\n```\n\n### 5.5 Student Admission Flow\n\n```mermaid\nflowchart TD\n    A([Receptionist/Admin]) --> B[Open New Admission form]\n    B --> C[Fill personal details: name, DOB, parent, class]\n    C --> D[Fill custom fields: Blood Group, Allergies etc]\n    D --> E[\"POST /api/students/admission\"]\n    E --> F[\"INSERT into students table\"]\n    F --> G[\"Generate Admission No: SS + Year + ID\"]\n    G --> H[Create login credentials: email + password]\n    H --> I[\"INSERT into users table with role=student\"]\n    I --> J[\"Link students.user_id = users.id\"]\n    J --> K[\"Generate QR code for student ID card\"]\n    K --> L[Assign to class, section, fee plan]\n    L --> M([Admission Complete ✓])\n```\n\n---\n\n## 6. Database ER Diagram\n\n### 6.1 Core Entity Relationships\n\n```mermaid\nerDiagram\n    users {\n        bigint id PK\n        string name\n        string email\n        string password\n        string role\n        string two_factor_secret\n        timestamp created_at\n    }\n\n    students {\n        bigint id PK\n        bigint user_id FK\n        string admission_no\n        string name\n        string class_name\n        string section\n        string father_name\n        string mother_name\n        string phone\n        string email\n        date dob\n        string gender\n        string blood_group\n        string address\n        date admission_date\n        string status\n    }\n\n    staff {\n        bigint id PK\n        string emp_id\n        string name\n        string role\n        string designation\n        string email\n        string phone\n        string department\n        decimal basic_salary\n        string status\n    }\n\n    school_classes {\n        bigint id PK\n        string name\n        string sections\n        string class_teacher\n        int room_no\n    }\n\n    subjects {\n        bigint id PK\n        string name\n        string code\n        string type\n    }\n\n    users ||--o| students : \"has profile\"\n    users ||--o| staff : \"has profile\"\n    students }o--|| school_classes : \"enrolled in\"\n    school_classes }o--o{ subjects : \"class_subjects\"\n```\n\n### 6.2 Academic & Examination Relationships\n\n```mermaid\nerDiagram\n    exams {\n        bigint id PK\n        string name\n        string term\n        string type\n        string status\n        date start_date\n        date end_date\n    }\n\n    exam_schedules {\n        bigint id PK\n        bigint exam_id FK\n        bigint class_id FK\n        bigint subject_id FK\n        date exam_date\n        time start_time\n        time end_time\n        int total_marks\n        int pass_marks\n        string room\n    }\n\n    exam_results {\n        bigint id PK\n        bigint student_id FK\n        string exam\n        string subject\n        int marks\n        int total\n        string grade\n        string status\n    }\n\n    timetables {\n        bigint id PK\n        bigint class_id FK\n        bigint subject_id FK\n        string day\n        time start_time\n        time end_time\n        string teacher_name\n    }\n\n    homeworks {\n        bigint id PK\n        bigint class_id FK\n        bigint subject_id FK\n        text description\n        date due_date\n        bigint assigned_by FK\n    }\n\n    exams ||--o{ exam_schedules : \"has schedules\"\n    students ||--o{ exam_results : \"has results\"\n    school_classes ||--o{ exam_schedules : \"scheduled for\"\n    school_classes ||--o{ timetables : \"has timetable\"\n    school_classes ||--o{ homeworks : \"assigned to\"\n```\n\n### 6.3 Finance & Fee Relationships\n\n```mermaid\nerDiagram\n    fee_types {\n        bigint id PK\n        string name\n        decimal amount\n        string frequency\n    }\n\n    student_fees {\n        bigint id PK\n        string receipt_no\n        bigint student_id FK\n        string type\n        decimal amount\n        decimal paid\n        string payment_mode\n        string transaction_id\n        decimal fine\n        decimal discount\n        string status\n        string month\n        string razorpay_order_id\n        string razorpay_payment_id\n        datetime payment_date\n    }\n\n    fee_discounts {\n        bigint id PK\n        bigint student_id FK\n        bigint fee_type_id FK\n        string discount_name\n        enum discount_type\n        decimal value\n        string reason\n    }\n\n    transactions {\n        bigint id PK\n        string type\n        string category\n        decimal amount\n        string description\n        date transaction_date\n        string reference_no\n        string payment_mode\n    }\n\n    accounts_heads {\n        bigint id PK\n        string name\n        enum type\n        text description\n    }\n\n    students ||--o{ student_fees : \"owes\"\n    students ||--o{ fee_discounts : \"has discounts\"\n    fee_types ||--o{ fee_discounts : \"applied to\"\n    fee_types ||--o{ student_fees : \"categorises\"\n```\n\n### 6.4 Library Relationships\n\n```mermaid\nerDiagram\n    library_books {\n        bigint id PK\n        string title\n        string author\n        string isbn\n        string category\n        string publisher\n        year publish_year\n        string rack_no\n        string language\n        int qty\n        int available_qty\n        string status\n    }\n\n    book_issues {\n        bigint id PK\n        bigint book_id FK\n        bigint student_id FK\n        bigint staff_id FK\n        string student_name\n        date issue_date\n        date due_date\n        date return_date\n        decimal fine_amount\n        string status\n    }\n\n    library_books ||--o{ book_issues : \"issued via\"\n    students ||--o{ book_issues : \"borrows\"\n    staff ||--o{ book_issues : \"borrows\"\n```\n\n### 6.5 Operations Relationships\n\n```mermaid\nerDiagram\n    transport_routes {\n        bigint id PK\n        string route_name\n        string route_no\n        string vehicle_no\n        string driver_name\n        int student_count\n    }\n\n    transport_stops {\n        bigint id PK\n        bigint route_id FK\n        string stop_name\n        string pickup_time\n        decimal fare\n    }\n\n    student_transports {\n        bigint id PK\n        bigint student_id FK\n        bigint route_id FK\n        string stop_name\n    }\n\n    hostels {\n        bigint id PK\n        string name\n        string type\n        text address\n        int intake\n    }\n\n    hostel_rooms {\n        bigint id PK\n        bigint hostel_id FK\n        string room_no\n        string type\n        int capacity\n        decimal fee\n    }\n\n    student_hostels {\n        bigint id PK\n        bigint student_id FK\n        bigint hostel_id FK\n        bigint room_id FK\n        date allotment_date\n    }\n\n    transport_routes ||--o{ transport_stops : \"has stops\"\n    transport_routes ||--o{ student_transports : \"serves\"\n    students ||--o| student_transports : \"uses\"\n    hostels ||--o{ hostel_rooms : \"has rooms\"\n    students ||--o| student_hostels : \"allotted to\"\n    hostel_rooms ||--o{ student_hostels : \"accommodates\"\n```\n\n### 6.6 Attendance & Communication Relationships\n\n```mermaid\nerDiagram\n    attendances {\n        bigint id PK\n        bigint student_id FK\n        bigint class_id FK\n        date date\n        enum status\n        string remark\n        bigint marked_by FK\n    }\n\n    staff_attendances {\n        bigint id PK\n        bigint staff_id FK\n        date date\n        enum status\n        time time_in\n        time time_out\n    }\n\n    qr_attendance_logs {\n        bigint id PK\n        string name\n        string identifier\n        enum person_type\n        string status\n        timestamp scanned_at\n    }\n\n    notices {\n        bigint id PK\n        string title\n        text content\n        date date\n        string audience\n        bool is_published\n        bigint created_by FK\n    }\n\n    messages {\n        bigint id PK\n        bigint from_user_id FK\n        bigint to_user_id FK\n        string subject\n        text body\n        bool is_read\n    }\n\n    notification_logs {\n        bigint id PK\n        string recipient_name\n        string recipient_contact\n        enum channel\n        string subject\n        text body\n        enum status\n    }\n\n    students ||--o{ attendances : \"has records\"\n    staff ||--o{ staff_attendances : \"has records\"\n    users ||--o{ notices : \"creates\"\n    users ||--o{ messages : \"sends\"\n    users ||--o{ messages : \"receives\"\n```\n\n### 6.7 RBAC Relationships\n\n```mermaid\nerDiagram\n    permissions {\n        bigint id PK\n        string name\n        string module\n        string action\n    }\n\n    role_permissions {\n        bigint id PK\n        string role\n        bigint permission_id FK\n    }\n\n    users {\n        bigint id PK\n        string role\n        string email\n        string name\n    }\n\n    permissions ||--o{ role_permissions : \"granted via\"\n```\n\n---\n\n## 7. Role-Based Access Control (RBAC)\n\n### Role Permission Matrix\n\n| Module / Action | Super Admin | Admin | Teacher | Accountant | Librarian | Receptionist | Parent | Student |\n|----------------|:-----------:|:-----:|:-------:|:----------:|:---------:|:------------:|:------:|:-------:|\n| Students — View | ✅ | ✅ | ✅ | | | ✅ | | |\n| Students — Create/Edit/Delete | ✅ | ✅ | | | | ✅ | | |\n| New Admission | ✅ | ✅ | | | | ✅ | | |\n| Transfer Certificate | ✅ | ✅ | | | | | | |\n| Staff — View | ✅ | ✅ | | | | | | |\n| Staff — Create/Edit/Delete | ✅ | ✅ | | | | | | |\n| Mark Attendance | ✅ | ✅ | ✅ | | | | | |\n| QR Attendance | ✅ | ✅ | ✅ | | | ✅ | | |\n| Attendance Report | ✅ | ✅ | ✅ | | | | | |\n| Examinations | ✅ | ✅ | ✅ | | | | ✅ | ✅ |\n| Marks Entry | ✅ | ✅ | ✅ | | | | | |\n| Admit Card | ✅ | ✅ | ✅ | | | | ✅ | ✅ |\n| Fee Collect / View | ✅ | ✅ | | ✅ | | | | |\n| Razorpay Payments | ✅ | ✅ | | ✅ | | | | |\n| Annual Calendar — View | ✅ | ✅ | ✅ | | | | ✅ | ✅ |\n| Annual Calendar — Add/Delete | ✅ | ✅ | ✅ | | | | ❌ | ❌ |\n| Download Center — View/Download | ✅ | ✅ | ✅ | | | | ✅ | ✅ |\n| Download Center — Upload/Delete | ✅ | ✅ | ✅ | | | | ❌ | ❌ |\n| Live Classes — View/Join | ✅ | ✅ | ✅ | | | | ✅ | ✅ |\n| Live Classes — Schedule/Delete | ✅ | ✅ | ✅ | | | | ❌ | ❌ |\n| Library — View | ✅ | ✅ | ✅ | | ✅ | | | ✅ |\n| Library — Issue/Return/Add | ✅ | ✅ | ✅ | | ✅ | | | ❌ |\n| Transport — View | ✅ | ✅ | | | | | ✅ | ✅ |\n| Transport — Manage | ✅ | ✅ | | | | | ❌ | ❌ |\n| Hostel — View/Manage | ✅ | ✅ | | | | | | |\n| Notices — View | ✅ | ✅ | ✅ | | | | ✅ | ✅ |\n| Notices — Create/Edit | ✅ | ✅ | ✅ | | | | | |\n| Payroll — View | ✅ | ✅ | | ✅ | | | | |\n| Payroll — Generate/Pay | ✅ | ✅ | | ✅ | | | | |\n| Reports | ✅ | ✅ | | ✅ | | | | |\n| Settings | ✅ | | | | | | | |\n\n### RBAC Implementation\n\n```mermaid\nflowchart LR\n    A[User logs in] --> B[JWT token stored in localStorage]\n    B --> C[\"window.auth = auth (global)\"]\n    C --> D[\"window.canManage(['role1','role2'])\"]\n    D --> E{Read localStorage user.role}\n    E -->|\"super_admin / admin\"| F[\"return true — full access\"]\n    E -->|\"role in allowedRoles\"| G[\"return true — role-specific access\"]\n    E -->|\"role NOT in allowedRoles\"| H[\"return false — UI element hidden\"]\n    H --> I[\"No button shown to user\"]\n    G --> J[\"Button/Feature rendered\"]\n    F --> J\n```\n\n---\n\n## 8. API Architecture\n\n### Base URL & Structure\n```\nBackend: http://127.0.0.1:8000/api/\nFrontend: http://127.0.0.1:5500/frontend/\n```\n\n### Key API Endpoints\n\n| Method | Endpoint | Controller | Description |\n|--------|----------|------------|-------------|\n| POST | `/api/auth/login` | Auth | Login with email + password |\n| POST | `/api/auth/2fa-verify` | Auth | Two-factor OTP verification |\n| POST | `/api/auth/logout` | Auth | Invalidate token |\n| GET | `/api/students` | Students | List all students |\n| POST | `/api/students` | Students | Create new student |\n| PUT | `/api/students/{id}` | Students | Update student record |\n| DELETE | `/api/students/{id}` | Students | Delete student |\n| GET | `/api/staff` | Staff | List all staff members |\n| POST | `/api/attendance/save` | Attendance | Bulk save attendance |\n| POST | `/api/attendance/qr-scan` | Attendance | Log QR scan |\n| GET | `/api/attendance/report` | Attendance | Attendance analytics |\n| GET | `/api/exams` | Exams | List examinations |\n| POST | `/api/exams/marks` | Exams | Save marks batch |\n| GET | `/api/fees` | Fees | Student fee ledger |\n| POST | `/api/fees/collect` | Fees | Record offline payment |\n| POST | `/api/razorpay/create-order` | Razorpay | Create online payment |\n| POST | `/api/razorpay/verify` | Razorpay | Verify payment signature |\n| GET | `/api/library/books` | Operations | Book catalogue |\n| POST | `/api/library/books` | Operations | Add new book |\n| POST | `/api/library/issues` | Operations | Issue book to student |\n| POST | `/api/library/return` | Operations | Return book |\n| GET | `/api/library/issues` | Operations | Circulation ledger |\n| GET | `/api/transport/routes` | Operations | Bus routes |\n| GET | `/api/hostel/rooms` | Operations | Hostel rooms |\n| GET | `/api/calendar-events` | Academics | Annual calendar |\n| POST | `/api/calendar-events` | Academics | Add event |\n| GET | `/api/download-materials` | Academics | Study materials |\n| POST | `/api/download-materials` | Academics | Upload material |\n| GET | `/api/live-classes` | Academics | Live class schedule |\n| GET | `/api/notices` | Operations | Notice board |\n| GET | `/api/reports/dashboard` | Dashboard | KPI dashboard stats |\n| GET | `/api/settings` | Settings | School configuration |\n| POST | `/api/settings` | Settings | Update settings |\n| GET | `/api/payroll` | Finance | Staff payroll |\n| POST | `/api/payroll/generate` | Finance | Generate salary |\n\n### API Response Format\n```json\n{\n  \"status\": \"success\",\n  \"data\": [...],\n  \"message\": \"Operation completed successfully\",\n  \"total\": 42\n}\n```\n\n---\n\n## 9. Module Catalogue (45 Modules)\n\n### 🎓 Student Management\n1. **Student Directory** — Full profile, search, filters\n2. **New Admission** — Complete admission workflow with custom fields\n3. **Login Credentials** — Generate username/password for students/parents\n4. **Student Promotion** — Bulk class promotion at year end\n5. **Transfer Certificate** — Automated TC generation\n6. **Behavior Records** — Incident logging per student\n7. **Student Documents** — Upload & manage certificates, birth cert, etc.\n\n### 👨‍🏫 Staff Management\n8. **Staff Directory** — Complete HR records\n9. **Staff Attendance** — Daily time-in/time-out with status\n10. **Leave Applications** — Leave approval workflow\n11. **Payroll** — Salary generation, payslips, payment tracking\n\n### 📅 Academic Management\n12. **Classes & Sections** — Class structure management\n13. **Subjects** — Subject catalogue with class mapping\n14. **Academic Sessions** — Year management (active session)\n15. **Timetable** — Weekly class timetable per class\n16. **Annual Calendar** — School events, holidays, exams\n17. **Homework** — Assignment distribution per class/subject\n\n### ✅ Attendance\n18. **Mark Attendance** — Manual per-student P/A/L/H\n19. **QR Code Attendance** — Scan-based attendance with live log\n20. **Attendance Report** — Class-wise and student-wise analytics\n\n### 📝 Examinations\n21. **Examinations** — Create and schedule exams\n22. **Marks Entry** — Subject-wise marks, auto-grade\n23. **Admit Cards** — Student admit card generation and print\n24. **Results** — Result cards with grade analysis\n\n### 💰 Finance\n25. **Fee Types** — Tuition, Transport, Hostel, Library fees\n26. **Fee Collection** — Per-student payment with receipt\n27. **Fee Discounts** — Sibling, merit, and scholarship discounts\n28. **Razorpay Online Payment** — Integrated online payment gateway\n29. **Accounts / Transactions** — Income/expense ledger\n30. **Financial Reports** — Revenue analytics and export\n\n### 📚 Library\n31. **Book Catalogue** — Full inventory with stock tracking\n32. **Book Issue** — Issue with due date and fine calculation\n33. **Book Return** — Return and auto-increment available stock\n34. **Circulation Ledger** — All issued/returned history\n\n### 🚌 Operations\n35. **Transport Routes** — Bus routes with stops and fares\n36. **Hostel** — Building, rooms, student allotments\n37. **Circular / Notices** — Published announcements per audience\n38. **Noticeboard** — School-wide notice management\n\n### 🎥 Digital Learning\n39. **Download Center** — Study material upload and download\n40. **Live Classes** — Google Meet / Zoom class scheduling and join\n\n### 📊 Reports & Analytics\n41. **Dashboard KPIs** — Real-time summary cards\n42. **Attendance Analytics** — Charts and export\n43. **Financial Analytics** — Revenue, collection rates\n44. **Academic Performance** — Student rank, grade distribution\n\n### ⚙️ System Administration\n45. **School Settings** — Profile, campus, Razorpay config, WhatsApp, RBAC, Custom Fields\n\n---\n\n## 10. Key Design Decisions\n\n### 10.1 SPA Architecture\nThe frontend is a **Single Page Application** using **hash-based routing** (`#/students`, `#/exams`, etc.) with no framework. This decision was made for:\n- Zero build step needed — works as static files\n- Easy cPanel deployment (no Node.js server needed for frontend)\n- Fast navigation without page reloads\n\n### 10.2 Reactive Store\n`window.SS_STORE` provides localStorage-backed reactive state that:\n- Persists data across page refreshes as a fallback to the API\n- Allows optimistic UI updates before API confirms\n- Reduces redundant API calls with in-memory caching\n\n### 10.3 Token-Based Auth with 2FA\n- JWT-style Bearer token stored in `localStorage`\n- All API requests attach `Authorization: Bearer <token>` header\n- Optional TOTP-based two-factor authentication for admin accounts\n\n### 10.4 Offline Fallback Strategy\nEach view function follows this pattern:\n1. Try to fetch from MySQL via REST API\n2. On API failure → fall back to `SS_STORE` localStorage data\n3. UI always renders — never blank due to API failure\n\n### 10.5 Razorpay Payment Integration\n- Server creates `order_id` via Razorpay API (backend secret key protected)\n- Frontend opens Razorpay checkout widget\n- On success, `payment_id` + `signature` sent to backend for HMAC-SHA256 verification\n- Only after verification is `student_fees.status` updated to `Paid`\n\n---\n\n## 11. Deployment Architecture\n\n```mermaid\ngraph TD\n    subgraph INTERNET[\"🌐 Internet\"]\n        BROWSER[\"Student / Parent / Teacher Browser\"]\n    end\n\n    subgraph CPANEL[\"🖥️ cPanel Shared Hosting / VPS\"]\n        APACHE[\"Apache 2.4\\n(.htaccess mod_rewrite)\"]\n        PHP[\"PHP 8.3 + CodeIgniter 3\"]\n        MYSQL[\"MySQL 8.x\\nDatabase: smart_school\"]\n        FILES[\"Static Frontend Files\\n/public_html/frontend/\"]\n    end\n\n    subgraph EXTERNAL[\"🔌 External Services\"]\n        RAZORPAY_EXT[\"Razorpay Payment Gateway\"]\n        WHATSAPP_EXT[\"WhatsApp Business API\"]\n        ZOOM[\"Zoom / Google Meet\"]\n    end\n\n    BROWSER -->|HTTPS| APACHE\n    APACHE -->|\"Static: /frontend/*\"| FILES\n    APACHE -->|\"API: /api/*\"| PHP\n    PHP -->|SQL Queries| MYSQL\n    PHP -->|Payment API| RAZORPAY_EXT\n    PHP -->|WhatsApp notification| WHATSAPP_EXT\n    BROWSER -->|Join class link| ZOOM\n```\n\n### Environment Configuration (`.env`)\n```ini\nDB_HOST=localhost\nDB_DATABASE=smart_school\nDB_USERNAME=smart_school_user\nDB_PASSWORD=<secure_password>\n\nRAZORPAY_KEY_ID=rzp_live_XXXXXXXX\nRAZORPAY_KEY_SECRET=XXXXXXXXXXXXXXXX\nRAZORPAY_MODE=live\n\nWHATSAPP_NUMBER=+919876543210\n```\n\n---\n\n## Appendix: Complete Database Table Index\n\n| # | Table Name | Purpose |\n|---|-----------|---------|\n| 1 | `users` | System user accounts & authentication |\n| 2 | `students` | Student profiles & admission records |\n| 3 | `staff` | Employee HR records |\n| 4 | `school_classes` | Class & section configuration |\n| 5 | `subjects` | Subject catalogue |\n| 6 | `class_subjects` | Class ↔ Subject mapping |\n| 7 | `academic_sessions` | Academic year management |\n| 8 | `timetables` | Weekly class schedules |\n| 9 | `homeworks` | Teacher-assigned homework |\n| 10 | `attendances` | Student daily attendance |\n| 11 | `staff_attendances` | Staff daily attendance |\n| 12 | `qr_attendance_logs` | QR scan attendance log |\n| 13 | `exams` | Examination master records |\n| 14 | `exam_schedules` | Per-class exam schedule |\n| 15 | `exam_results` | Student marks & grades |\n| 16 | `fee_types` | Fee category definitions |\n| 17 | `student_fees` | Individual fee records & payments |\n| 18 | `fee_discounts` | Scholarship & concession records |\n| 19 | `transactions` | General income/expense ledger |\n| 20 | `accounts_heads` | Chart of accounts |\n| 21 | `salary_records` | Monthly payroll records |\n| 22 | `payslip_items` | Individual payslip line items |\n| 23 | `library_books` | Book catalogue & inventory |\n| 24 | `book_issues` | Book issue & return ledger |\n| 25 | `transport_routes` | Bus route master |\n| 26 | `transport_stops` | Bus stop schedule |\n| 27 | `student_transports` | Student ↔ Route assignment |\n| 28 | `hostels` | Hostel building records |\n| 29 | `hostel_rooms` | Room configuration |\n| 30 | `student_hostels` | Student room allotment |\n| 31 | `calendar_events` | Annual academic calendar |\n| 32 | `download_materials` | Study material uploads |\n| 33 | `live_classes` | Live online class schedule |\n| 34 | `notices` | School circular notices |\n| 35 | `messages` | Internal staff messaging |\n| 36 | `notification_logs` | SMS/Email/Push log |\n| 37 | `leave_applications` | Staff & student leave requests |\n| 38 | `permissions` | Permission definitions (44 permissions) |\n| 39 | `role_permissions` | Role ↔ Permission mapping |\n| 40 | `custom_fields` | Dynamic admission form fields |\n| 41 | `student_custom_field_values` | Custom field data per student |\n| 42 | `student_documents` | Scanned documents per student |\n| 43 | `student_promotions` | Year-end promotion records |\n| 44 | `student_siblings` | Sibling relationship for discounts |\n| 45 | `student_timelines` | Student academic timeline events |\n| 46 | `student_notes` | Teacher notes on students |\n| 47 | `school_settings` | System-wide configuration |\n| 48 | `personal_access_tokens` | Bearer token store |\n| 49 | `password_reset_tokens` | Password reset links |\n| 50 | `sessions` | PHP session storage |\n| 51 | `cache` | Application cache store |\n| 52 | `cache_locks` | Cache lock management |\n| 53 | `jobs` | Background job queue |\n| 54 | `job_batches` | Batch job tracking |\n| 55 | `failed_jobs` | Failed job archive |\n| 56 | `migrations` | Database version tracking |\n\n---\n\n*Report generated: September 29, 2026 | Infosof Technologies | Smart School Management System v1.5*\n";
+
+  // Parse markdown
+  const renderer = new marked.Renderer();
+  
+  // Custom code renderer compatible with marked v12+ and older
+  const originalCode = renderer.code.bind(renderer);
+  renderer.code = function(token, language) {
+    const text = typeof token === 'object' ? token.text : token;
+    const lang = typeof token === 'object' ? token.lang : language;
+    if (lang === 'mermaid') {
+      return '<div class="mermaid-wrapper"><div class="mermaid">' + text + '</div></div>';
+    }
+    return originalCode.call(this, token, language);
+  };
+
+  marked.setOptions({ renderer: renderer, gfm: true, breaks: false });
+
+  document.getElementById('report-container').innerHTML = marked.parse(rawMarkdown);
+
+  window.renderAll = async function() {
+    try {
+      await mermaid.run({
+        querySelector: '.mermaid'
+      });
+      return true;
+    } catch (e) {
+      console.error('Mermaid render error:', e);
+      return false;
+    }
+  };
+</script>
+</body>
+</html>

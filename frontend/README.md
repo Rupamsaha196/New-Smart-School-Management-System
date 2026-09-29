@@ -1,16 +1,44 @@
-# React + Vite
+# Smart School Management System — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Clean and modern **HTML5 / CSS3 / JavaScript** frontend for the Smart School Management System.
 
-Currently, two official plugins are available:
+## Architecture Highlights
+- **Zero Build Step Required**: Works directly with any web browser, VS Code **"Go Live"** (Live Server), or any static HTTP web server.
+- **Pure Web Standards**: HTML5 semantic markup, CSS3 design tokens (Light/Dark themes, Glassmorphism, Micro-animations), and modern JavaScript.
+- **Client-Side Routing**: Fast, responsive hash-based SPA router (`#/dashboard`, `#/students`, `#/attendance/qr`, etc.).
+- **Full Backend API Integration**: Connects seamlessly with the CodeIgniter / PHP REST API at `http://localhost:8000/api`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Quick Start
 
-## React Compiler
+### Option 1: VS Code Live Server (Recommended)
+1. Open this `frontend` directory (or workspace root) in VS Code.
+2. Right-click `index.html` and select **"Open with Live Server"** (or click **"Go Live"** in the bottom status bar).
+3. The application will launch in your browser at `http://127.0.0.1:5500/index.html`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Option 2: Python HTTP Server
+```bash
+python -m http.server 5500
+```
+Open `http://localhost:5500` in your browser.
 
-## Expanding the Oxlint configuration
+### Option 3: Direct Browser Open
+Simply double-click or open `index.html` in any modern web browser (Chrome, Edge, Firefox, Safari).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Directory Structure
+```
+frontend/
+├── index.html                 # Main HTML application entrypoint
+├── css/
+│   └── style.css              # CSS design system, themes & responsive layout
+├── js/
+│   ├── app.js                 # API client, Auth, Toast, Layout, Dashboard & Router
+│   ├── views-students.js      # Student Profile, TC Generator, Behavior Records
+│   ├── views-academics.js     # Classes, Subjects, Sessions, Timetable, Calendar, Downloads, Live Classes
+│   ├── views-attendance.js    # Manual Roll Call & Monthly Attendance Reports
+│   ├── views-exams.js         # Exams Schedule, Marks Recording & Hall Ticket Admit Cards
+│   ├── views-finance.js       # Fee Structure & Income/Expense Financial Ledger
+│   ├── views-staff.js         # Staff Directory & Biometric Attendance
+│   ├── views-operations.js    # Library, Transport, Hostel, Notice Board
+│   └── views-settings.js      # Settings, Custom Fields, Two-Factor Auth (2FA)
+└── assets/                    # Favicon, branding images & icons
+```

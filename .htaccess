@@ -1,0 +1,48 @@
+# ==============================================================================
+# SMART SCHOOL MANAGEMENT SYSTEM - ROOT CPANEL APACHE CONFIGURATION
+# Infosof Technologies 2026
+# ==============================================================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block direct HTTP access to sensitive database dumps and environment files
+    RewriteRule ^database/.*$ - [F,L]
+    RewriteRule ^\.env.*$ - [F,L]
+    RewriteRule ^\.git.*$ - [F,L]
+
+    # 1. Route API requests directly to CodeIgniter REST Controller
+    RewriteCond %{REQUEST_URI} ^/api(/.*)?$ [NC]
+    RewriteRule ^api/?(.*)$ backend_codeigniter/index.php/api/$1 [L,QSA]
+
+    # 2. Allow direct access to backend_codeigniter or frontend assets
+    RewriteCond %{REQUEST_URI} ^/(backend_codeigniter|frontend) [NC]
+    RewriteRule ^ - [L]
+
+    # 3. Transparently serve frontend assets (css, js, assets) from /frontend/
+    RewriteCond %{DOCUMENT_ROOT}/frontend/$1 -f
+    RewriteRule ^(.*)$ frontend/$1 [L]
+
+    RewriteCond %{DOCUMENT_ROOT}/frontend/$1 -d
+    RewriteRule ^(.*)$ frontend/$1/ [L]
+
+    # 4. Route root request to frontend single-page application
+    RewriteRule ^$ frontend/index.html [L]
+</IfModule>
+
+# Default Document Index
+DirectoryIndex frontend/index.html index.html index.php
+
+# Security Headers & MIME Types
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType application/javascript .js
+    AddType text/css .css
+    AddType image/svg+xml .svg
+    AddType image/webp .webp
+</IfModule>
