@@ -8,6 +8,13 @@
 $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
 $parsed_path = parse_url($request_uri, PHP_URL_PATH);
 
+// 0. Lightweight Health Check endpoint (for Render keep-alive & monitoring)
+if ($parsed_path === '/health' || $parsed_path === '/api/health') {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['status' => 'healthy', 'time' => time(), 'service' => 'Smart School Management System']);
+    exit;
+}
+
 // 1. If API request, route directly into CodeIgniter
 if (preg_match('#^/api(/.*)?$#i', $parsed_path) || strpos($parsed_path, 'api/') !== false) {
     require_once __DIR__ . '/backend_codeigniter/index.php';
