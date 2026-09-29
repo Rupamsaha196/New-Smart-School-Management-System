@@ -24,6 +24,7 @@ if (!$is_cli) {
 echo "========================================================================\n";
 echo "    SMART SCHOOL MANAGEMENT SYSTEM - DATABASE MIGRATION RUNNER         \n";
 echo "    INFOSOF TECHNOLOGIES 2026 - MYSQL 8 / RENDER CLOUD DEPLOYMENT      \n";
+echo "    Engine: v2.1 (SSL/TLS Encrypted Transport)                         \n";
 echo "========================================================================\n\n";
 
 // 1. Resolve Database Credentials from Environment
@@ -55,9 +56,9 @@ if (!$sql_path) {
 
 echo "Found SQL Dump: " . basename($sql_path) . " (" . round(filesize($sql_path) / 1024, 2) . " KB)\n";
 
-// 3. Connect via PDO MySQL
+// 3. Connect via PDO MySQL with TLS/SSL Transport
 try {
-    echo "Connecting to MySQL server...\n";
+    echo "Connecting to MySQL server with SSL/TLS...\n";
     $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
     
     $pdo_options = [
@@ -67,9 +68,12 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
     ];
 
-    // Enable TLS/SSL for cloud databases requiring secure transport (TiDB Serverless, Aiven, etc.)
-    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
-        $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+    // Force TLS/SSL transport for cloud MySQL providers (TiDB Serverless, Aiven, etc.)
+    $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
+    if (file_exists($ca_bundle)) {
+        $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
+    } else {
+        $pdo_options[PDO::MYSQL_ATTR_SSL_CAPATH] = '/etc/ssl/certs';
     }
     if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
         $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;

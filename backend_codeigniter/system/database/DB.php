@@ -35,8 +35,11 @@ function &DB($params = '', bool $query_builder_override = NULL) {
             PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
         ];
 
-        if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
-            $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+        $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
+        if (file_exists($ca_bundle)) {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
+        } else {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_CAPATH] = '/etc/ssl/certs';
         }
         if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
             $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
