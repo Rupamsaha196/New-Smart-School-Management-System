@@ -28,11 +28,21 @@ function &DB($params = '', bool $query_builder_override = NULL) {
     $pdo = null;
 
     try {
-        $pdo = new PDO($dsn, $username, $password, [
+        $pdo_options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_TIMEOUT            => 3,
-        ]);
+            PDO::ATTR_TIMEOUT            => 5,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
+        ];
+
+        if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+        }
+        if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+            $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+        }
+
+        $pdo = new PDO($dsn, $username, $password, $pdo_options);
     } catch (PDOException $e) {
         // Fallback to SQLite if local MySQL is temporarily unavailable
         $sqlite_file = APPPATH . '../database/database.sqlite';

@@ -6,6 +6,7 @@ LABEL description="Smart School Management System - Render Cloud Deployment"
 
 # Install system utilities and library dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     libzip-dev \
     zip \
     unzip \

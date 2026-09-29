@@ -59,11 +59,23 @@ echo "Found SQL Dump: " . basename($sql_path) . " (" . round(filesize($sql_path)
 try {
     echo "Connecting to MySQL server...\n";
     $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
-    $pdo = new PDO($dsn, $username, $password, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    
+    $pdo_options = [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_TIMEOUT            => 10,
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-    ]);
+    ];
+
+    // Enable TLS/SSL for cloud databases requiring secure transport (TiDB Serverless, Aiven, etc.)
+    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
+        $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+    }
+    if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+        $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+    }
+
+    $pdo = new PDO($dsn, $username, $password, $pdo_options);
     echo "Successfully connected to MySQL database: {$database}\n\n";
 } catch (PDOException $e) {
     echo "ERROR: Failed to connect to MySQL database.\n";
