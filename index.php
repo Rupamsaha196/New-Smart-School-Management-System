@@ -37,6 +37,9 @@ if ($parsed_path !== '/' && file_exists($frontend_file) && !is_dir($frontend_fil
 $index_html = __DIR__ . '/frontend/index.html';
 if (file_exists($index_html)) {
     header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     readfile($index_html);
     exit;
 }
