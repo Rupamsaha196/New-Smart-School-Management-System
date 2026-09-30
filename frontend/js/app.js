@@ -1107,21 +1107,15 @@ function formatActivityDate(dateStr) {
 async function renderDashboard() {
   const user = auth.getUser();
   const role = user?.role || 'admin';
-
   let stats = null;
   let loadError = null;
-
   try {
     const res = await api.get('/dashboard');
-    if (res && res.data) {
-      stats = res.data;
-    }
+    if (res && res.data) { stats = res.data; }
   } catch (e) {
     console.warn('Dashboard data fetch error:', e);
     loadError = e.message || 'Unable to connect to live database';
   }
-
-  // Live database metrics with safe defaults if table is empty
   const todayStr = new Date().toISOString().split('T')[0];
   let localDailyAtt = null;
   try {
@@ -1132,228 +1126,585 @@ async function renderDashboard() {
         const p = parsed.filter(s => s.status === 'Present' || s.status === 'Late').length;
         const a = parsed.filter(s => s.status === 'Absent').length;
         const tot = parsed.length;
-        const r = tot > 0 ? Math.round((p / tot) * 1000) / 10 : 0;
-        localDailyAtt = { total: tot, present: p, absent: a, rate: r };
+        localDailyAtt = { total: tot, present: p, absent: a, rate: tot > 0 ? Math.round((p / tot) * 1000) / 10 : 0 };
       }
     }
   } catch {}
+  const errorBanner = loadError ? `
+    <div style="background:rgba(245,158,11,0.12);border:1px solid #f59e0b;padding:12px 16px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div class="flex items-center gap-2"><span>⚠️</span>
+        <span><strong>Backend Sync:</strong> ${loadError}. Ensure PHP backend is running.</span>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="handleRouting()">Retry</button>
+    </div>
+  ` : '';
+  switch (role) {
+    case 'teacher':      return _renderTeacherDashboard(user, stats, localDailyAtt, errorBanner);
+    case 'librarian':    return _renderLibrarianDashboard(user, stats, errorBanner);
+    case 'parent':       return _renderParentDashboard(user, stats, errorBanner);
+    case 'student':      return _renderStudentDashboard(user, stats, errorBanner);
+    case 'accountant':   return _renderAccountantDashboard(user, stats, localDailyAtt, errorBanner);
+    case 'receptionist': return _renderReceptionistDashboard(user, stats, localDailyAtt, errorBanner);
+    default:             return _renderAdminDashboard(user, stats, localDailyAtt, errorBanner);
+  }
+}
 
-  const totalStudents = stats ? (stats.total_students ?? 0) : (window.SS_STORE?.get('students')?.length || 8);
-  const totalClasses  = stats ? (stats.total_classes ?? 0) : (window.SS_STORE?.get('classes')?.length || 12);
-
-  // If local storage has today's freshly marked attendance, prioritize it or use stats
-  const dailyAttendance = (localDailyAtt && localDailyAtt.total > 0)
+/* =====================================================
+   ADMIN / SUPER ADMIN DASHBOARD
+   ===================================================== */
+function _renderAdminDashboard(user, stats, localDailyAtt, errorBanner) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const totalStudents = stats ? (stats.total_students ?? 0) : 0;
+  const totalClasses  = stats ? (stats.total_classes ?? 0) : 0;
+  const totalStaff    = stats ? (stats.total_staff ?? 0) : 0;
+  const totalTeachers = stats ? (stats.total_teachers ?? totalStaff) : 0;
+  const dailyAtt = (localDailyAtt && localDailyAtt.total > 0)
     ? localDailyAtt
     : (stats?.daily_attendance || { total: totalStudents, present: totalStudents, absent: 0, rate: 100 });
-
-  const attRate = (dailyAttendance.total > 0)
-    ? dailyAttendance.rate
-    : (stats?.attendance_rate ?? 0);
-
-  const presentCount = dailyAttendance.present ?? 0;
-  const absentCount  = dailyAttendance.absent ?? 0;
-  const totalCount   = dailyAttendance.total || totalStudents;
-
-  const feesMonth     = stats ? (stats.fees_this_month ?? stats.fees_collected ?? 0) : 0;
-  const feesTotal     = stats ? (stats.fees_collected ?? 0) : 0;
-  const feesDue       = stats ? (stats.fees_due ?? 0) : 0;
-  const totalStaff    = stats ? (stats.total_staff ?? 0) : 0;
-
+  const attRate      = dailyAtt.total > 0 ? dailyAtt.rate : (stats?.attendance_rate ?? 0);
+  const presentCount = dailyAtt.present ?? 0;
+  const absentCount  = dailyAtt.absent ?? 0;
+  const totalCount   = dailyAtt.total || totalStudents;
+  const feesMonth = stats ? (stats.fees_this_month ?? stats.fees_collected ?? 0) : 0;
+  const feesTotal = stats ? (stats.fees_collected ?? 0) : 0;
+  const feesDue   = stats ? (stats.fees_due ?? 0) : 0;
   let weekly = (stats?.weekly_attendance && stats.weekly_attendance.length > 0)
     ? stats.weekly_attendance
-    : [
-        { day: 'Mon', pct: 0, val: '0%' },
-        { day: 'Tue', pct: 0, val: '0%' },
-        { day: 'Wed', pct: 0, val: '0%' },
-        { day: 'Thu', pct: 0, val: '0%' },
-        { day: 'Fri', pct: 0, val: '0%' }
-      ];
-
-  // Update today's bar in weekly attendance with live roll call
+    : [{ day: 'Mon', pct: 0, val: '0%' }, { day: 'Tue', pct: 0, val: '0%' },
+       { day: 'Wed', pct: 0, val: '0%' }, { day: 'Thu', pct: 0, val: '0%' },
+       { day: 'Fri', pct: 0, val: '0%' }];
   if (Array.isArray(weekly)) {
-    const todayDayName = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-    const todayBar = weekly.find(w => w.date === todayStr || w.day === todayDayName);
-    if (todayBar && totalCount > 0) {
-      todayBar.pct = Math.round(attRate);
-      todayBar.val = `${todayBar.pct}%`;
-      todayBar.present = presentCount;
-      todayBar.total = totalCount;
+    const dn = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+    const tb = weekly.find(w => w.date === todayStr || w.day === dn);
+    if (tb && totalCount > 0) {
+      tb.pct = Math.round(attRate); tb.val = tb.pct + '%';
+      tb.present = presentCount; tb.total = totalCount;
     }
   }
-
-  const monthlyFees = (stats?.monthly_fees && stats.monthly_fees.length > 0)
-    ? stats.monthly_fees
-    : [
-        { month: 'Apr', pct: 0, val: '₹0' },
-        { month: 'May', pct: 0, val: '₹0' },
-        { month: 'Jun', pct: 0, val: '₹0' },
-        { month: 'Jul', pct: 0, val: '₹0' },
-        { month: 'Aug', pct: 0, val: '₹0' },
-        { month: 'Sep', pct: 0, val: '₹0' }
-      ];
-
-  const activities = (stats?.recent_activities && stats.recent_activities.length > 0)
-    ? stats.recent_activities
-    : [];
-
-  return `
-    <div class="animate-fadeIn">
-      <div class="page-header">
-        <div>
-          <h1>Welcome, ${user?.name || 'Administrator'}!</h1>
-          <p class="subtitle">Real-time school performance & operational overview</p>
-        </div>
-        <div class="flex gap-2">
-          ${window.canManage(['receptionist']) ? `<a href="#/students/admission" class="btn btn-primary">${icon('plus', 18)} New Admission</a>` : ''}
-          ${window.canManage(['accountant']) ? `<a href="#/fees/collection" class="btn btn-secondary">${icon('banknotes', 18)} Collect Fees</a>` : ''}
-        </div>
-      </div>
-
-      ${loadError ? `
-        <div class="alert alert-warning mb-4" style="background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b; padding: 12px 16px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
-          <div class="flex items-center gap-2">
-            <span>⚠️</span>
-            <span><strong>Backend Sync:</strong> ${loadError}. Ensure PHP backend is running.</span>
-          </div>
-          <button class="btn btn-sm btn-secondary" onclick="handleRouting()">Retry Connection</button>
-        </div>
-      ` : ''}
-
-      <div class="grid-stats mb-6">
-        <div class="stat-card stat-primary animate-slideUp">
-          <div class="stat-icon">${icon('users', 24)}</div>
-          <div class="stat-value">${totalStudents}</div>
-          <div class="stat-label">Total Enrolled Students</div>
-          <span class="stat-change positive">✓ Live Database (${totalStudents} Active Students)</span>
-        </div>
-
-        <div class="stat-card animate-slideUp" style="animation-delay: 60ms;">
-          <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--success-500);">${icon('academic', 24)}</div>
-          <div class="stat-value">${totalClasses}</div>
-          <div class="stat-label">Active Classes & Sections</div>
-          <span class="stat-change positive">${totalStaff} Assigned Faculty</span>
-        </div>
-
-        <div class="stat-card animate-slideUp" style="animation-delay: 120ms;">
-          <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning-500);">${icon('checkCircle', 24)}</div>
-          <div class="stat-value">${attRate}%</div>
-          <div class="stat-label">Today's Attendance Rate</div>
-          <span class="stat-change ${attRate >= 80 ? 'positive' : ''}" style="${absentCount > 0 ? 'color: var(--danger-500); font-weight: 600;' : ''}">${presentCount} Present Today of ${totalCount}${absentCount > 0 ? ` (${absentCount} Absent)` : ''}</span>
-        </div>
-
-        <div class="stat-card animate-slideUp" style="animation-delay: 180ms;">
-          <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--primary-500);">${icon('banknotes', 24)}</div>
-          <div class="stat-value">₹${Number(feesMonth).toLocaleString('en-IN')}</div>
-          <div class="stat-label">Fee Collection (Month)</div>
-          <span class="stat-change positive" title="Total Collected ₹${Number(feesTotal).toLocaleString('en-IN')}, Due ₹${Number(feesDue).toLocaleString('en-IN')}">₹${Number(feesTotal).toLocaleString('en-IN')} Total Collected</span>
-        </div>
-      </div>
-
-      <div class="grid-2 mb-6">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Weekly Attendance Trends</span>
-            <span class="badge badge-primary">Last 5 Days (Live DB)</span>
-          </div>
-          <div style="height: 220px; display: flex; align-items: flex-end; justify-content: space-between; padding: 20px 10px 0 10px; border-bottom: 2px solid var(--border-secondary);">
-            ${weekly.map(item => `
-              <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1;">
-                <span class="text-xs font-semibold" style="color: var(--primary-600);">${item.val}</span>
-                <div style="width: 38px; height: ${Math.max(8, item.pct * 1.5)}px; background: linear-gradient(180deg, #3b82f6 0%, #93c5fd 100%); border-radius: 8px 8px 0 0;" title="${item.day} (${item.date}): ${item.present}/${item.total} Present (${item.val})"></div>
-                <span class="text-xs text-secondary" style="font-weight: 600;">${item.day}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Fee Revenue vs Target (in ₹)</span>
-            <span class="badge badge-success">Live Fee Ledger</span>
-          </div>
-          <div style="height: 220px; display: flex; align-items: flex-end; justify-content: space-between; padding: 20px 10px 0 10px; border-bottom: 2px solid var(--border-secondary);">
-            ${monthlyFees.map(item => `
-              <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1;">
-                <span class="text-xs font-semibold" style="color: var(--success-600);">${item.val}</span>
-                <div style="width: 32px; height: ${Math.max(8, item.pct * 1.5)}px; background: linear-gradient(180deg, #10b981 0%, #a7f3d0 100%); border-radius: 8px 8px 0 0;" title="${item.full_month || item.month}: Collected ₹${Number(item.collected).toLocaleString('en-IN')} / Target ₹${Number(item.target).toLocaleString('en-IN')} (${item.pct}%)"></div>
-                <span class="text-xs text-secondary" style="font-weight: 600;">${item.month}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Quick Actions</span>
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-            <a href="#/attendance/qr" class="card card-hover flex items-center gap-3 p-4" style="background: var(--bg-secondary); border-radius: var(--radius-md);">
-              <span style="color: var(--primary-600);">${icon('qr', 28)}</span>
-              <div>
-                <div style="font-weight: 600; font-size: 0.9rem;">QR Attendance</div>
-                <div class="text-xs text-secondary">Contactless Check-in</div>
-              </div>
-            </a>
-            ${window.canManage(['receptionist']) ? `
-            <a href="#/students/admission" class="card card-hover flex items-center gap-3 p-4" style="background: var(--bg-secondary); border-radius: var(--radius-md);">
-              <span style="color: var(--success-600);">${icon('userPlus', 28)}</span>
-              <div>
-                <div style="font-weight: 600; font-size: 0.9rem;">New Admission</div>
-                <div class="text-xs text-secondary">Enroll student</div>
-              </div>
-            </a>` : `
-            <a href="#/students" class="card card-hover flex items-center gap-3 p-4" style="background: var(--bg-secondary); border-radius: var(--radius-md);">
-              <span style="color: var(--success-600);">${icon('users', 28)}</span>
-              <div>
-                <div style="font-weight: 600; font-size: 0.9rem;">Student Directory</div>
-                <div class="text-xs text-secondary">View Students</div>
-              </div>
-            </a>`}
-            <a href="#/attendance/mark" class="card card-hover flex items-center gap-3 p-4" style="background: var(--bg-secondary); border-radius: var(--radius-md);">
-              <span style="color: var(--warning-600);">${icon('checkCircle', 28)}</span>
-              <div>
-                <div style="font-weight: 600; font-size: 0.9rem;">Mark Attendance</div>
-                <div class="text-xs text-secondary">Class-wise roll call</div>
-              </div>
-            </a>
-            <a href="#/fees/collection" class="card card-hover flex items-center gap-3 p-4" style="background: var(--bg-secondary); border-radius: var(--radius-md);">
-              <span style="color: var(--info-600);">${icon('banknotes', 28)}</span>
-              <div>
-                <div style="font-weight: 600; font-size: 0.9rem;">Fee Collection</div>
-                <div class="text-xs text-secondary">Print receipt</div>
-              </div>
-            </a>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Recent Activity Feed</span>
-            <span class="text-xs text-secondary">Live DB Stream</span>
-          </div>
-          <div class="flex flex-col gap-3">
-            ${activities.length > 0 ? activities.map(act => `
-              <div class="p-3 rounded-md flex justify-between items-center" style="background: var(--bg-input);">
-                <div class="flex items-center gap-3">
-                  <span style="color: ${act.type === 'fee' ? 'var(--primary-500)' : 'var(--success-500)'};">${icon(act.icon || 'checkCircle', 20)}</span>
-                  <div>
-                    <div style="font-weight: 600; font-size: 0.875rem;">${act.title}</div>
-                    <div class="text-xs text-secondary">${act.subtitle}</div>
-                  </div>
-                </div>
-                <span class="text-xs text-secondary">${formatActivityDate(act.time)}</span>
-              </div>
-            `).join('') : `
-              <div class="p-4 text-center text-sm text-secondary">No recent admissions or payments found in database.</div>
-            `}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+  const monthlyFees = (stats?.monthly_fees && stats.monthly_fees.length > 0) ? stats.monthly_fees : [
+    { month: 'Apr', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'May', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Jun', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Jul', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Aug', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Sep', pct: 0, val: '₹0', collected: 0, target: 0 },
+  ];
+  const activities = (stats?.recent_activities && stats.recent_activities.length > 0) ? stats.recent_activities : [];
+  const notices    = (stats?.recent_notices && stats.recent_notices.length > 0) ? stats.recent_notices : [];
+  const weeklyHTML = weekly.map(item =>
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;">' +
+    '<span class="text-xs font-semibold" style="color:var(--primary-600);">' + item.val + '</span>' +
+    '<div style="width:38px;height:' + Math.max(8, item.pct * 1.5) + 'px;background:linear-gradient(180deg,#3b82f6 0%,#93c5fd 100%);border-radius:8px 8px 0 0;"></div>' +
+    '<span class="text-xs text-secondary" style="font-weight:600;">' + item.day + '</span>' +
+    '</div>').join('');
+  const feesHTML = monthlyFees.map(item =>
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;">' +
+    '<span class="text-xs font-semibold" style="color:var(--success-600);">' + item.val + '</span>' +
+    '<div style="width:32px;height:' + Math.max(8, item.pct * 1.5) + 'px;background:linear-gradient(180deg,#10b981 0%,#a7f3d0 100%);border-radius:8px 8px 0 0;"></div>' +
+    '<span class="text-xs text-secondary" style="font-weight:600;">' + item.month + '</span>' +
+    '</div>').join('');
+  const actHTML = activities.length > 0 ? activities.map(act =>
+    '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+    '<div class="flex items-center gap-3"><span style="color:' + (act.type === 'fee' ? 'var(--primary-500)' : 'var(--success-500)') + ';">' + icon(act.icon || 'checkCircle', 20) + '</span>' +
+    '<div><div style="font-weight:600;font-size:.875rem;">' + act.title + '</div>' +
+    '<div class="text-xs text-secondary">' + act.subtitle + '</div></div></div>' +
+    '<span class="text-xs text-secondary">' + formatActivityDate(act.time) + '</span></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No recent activity in database yet.</div>';
+  const noticesHTML = notices.length > 0 ?
+    '<div class="card mt-6"><div class="card-header"><span class="card-title">' + icon('megaphone', 18) + ' Recent Notices</span>' +
+    '<a href="#/notices" class="text-xs text-primary" style="font-weight:600;">View All</a></div>' +
+    '<div class="flex flex-col gap-2">' +
+    notices.slice(0, 4).map(n =>
+      '<div class="p-3 rounded-md flex items-center gap-3" style="background:var(--bg-input);">' +
+      '<span style="color:var(--warning-500);">' + icon('megaphone', 18) + '</span>' +
+      '<div style="flex:1;"><div style="font-weight:600;font-size:.875rem;">' + (n.title || 'Notice') + '</div>' +
+      '<div class="text-xs text-secondary">' + formatActivityDate(n.created_at) + '</div></div></div>').join('') +
+    '</div></div>' : '';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Welcome, ' + (user?.name || 'Administrator') + '!</h1>' +
+    '<p class="subtitle">Real-time school overview — all departments synced from live database</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/students/admission" class="btn btn-primary">' + icon('userPlus', 18) + ' New Admission</a>' +
+    '<a href="#/fees/collection" class="btn btn-secondary">' + icon('banknotes', 18) + ' Collect Fees</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('users', 24) + '</div>' +
+    '<div class="stat-value">' + totalStudents + '</div><div class="stat-label">Total Enrolled Students</div>' +
+    '<span class="stat-change positive">Live DB — ' + totalStudents + ' Active</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon" style="background:rgba(16,185,129,.15);color:var(--success-500);">' + icon('academic', 24) + '</div>' +
+    '<div class="stat-value">' + totalClasses + '</div><div class="stat-label">Active Classes &amp; Sections</div>' +
+    '<span class="stat-change positive">' + (totalTeachers || totalStaff) + ' Faculty Members</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(245,158,11,.15);color:var(--warning-500);">' + icon('checkCircle', 24) + '</div>' +
+    '<div class="stat-value">' + attRate + '%</div><div class="stat-label">Today\'s Attendance Rate</div>' +
+    '<span class="stat-change ' + (attRate >= 80 ? 'positive' : '') + '" style="' + (absentCount > 0 ? 'color:var(--danger-500);font-weight:600;' : '') + '">' + presentCount + ' Present · ' + absentCount + ' Absent</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:rgba(59,130,246,.15);color:var(--primary-500);">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value">₹' + Number(feesMonth).toLocaleString('en-IN') + '</div><div class="stat-label">Fee Collection (This Month)</div>' +
+    '<span class="stat-change positive">₹' + Number(feesTotal).toLocaleString('en-IN') + ' Total · ₹' + Number(feesDue).toLocaleString('en-IN') + ' Due</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Weekly Attendance Trend</span><span class="badge badge-primary">Last 5 Days · Live DB</span></div>' +
+    '<div style="height:220px;display:flex;align-items:flex-end;justify-content:space-between;padding:20px 10px 0;border-bottom:2px solid var(--border-secondary);">' + weeklyHTML + '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Monthly Fee Revenue vs Target</span><span class="badge badge-success">Live Ledger</span></div>' +
+    '<div style="height:220px;display:flex;align-items:flex-end;justify-content:space-between;padding:20px 10px 0;border-bottom:2px solid var(--border-secondary);">' + feesHTML + '</div></div>' +
+    '</div>' +
+    '<div class="grid-2">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Quick Actions</span></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">' +
+    '<a href="#/attendance/qr" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('qr', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">QR Attendance</div><div class="text-xs text-secondary">Contactless Check-in</div></div></a>' +
+    '<a href="#/students/admission" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('userPlus', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">New Admission</div><div class="text-xs text-secondary">Enroll student</div></div></a>' +
+    '<a href="#/attendance/mark" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--warning-600);">' + icon('checkCircle', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">Mark Attendance</div><div class="text-xs text-secondary">Class-wise roll call</div></div></a>' +
+    '<a href="#/fees/collection" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--info-600);">' + icon('banknotes', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">Fee Collection</div><div class="text-xs text-secondary">Print receipt</div></div></a>' +
+    '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Recent Activity Feed</span><span class="text-xs text-secondary">Live DB Stream</span></div>' +
+    '<div class="flex flex-col gap-3">' + actHTML + '</div></div>' +
+    '</div>' + noticesHTML + '</div>';
 }
+
+/* =====================================================
+   TEACHER DASHBOARD
+   ===================================================== */
+function _renderTeacherDashboard(user, stats, localDailyAtt, errorBanner) {
+  const myClasses    = stats?.my_classes || [];
+  const myStudents   = stats?.my_student_count ?? 0;
+  const totalClasses = stats?.total_classes ?? myClasses.length;
+  const totalSubj    = stats?.total_subjects ?? 0;
+  const examsMonth   = stats?.exams_this_month ?? 0;
+  const todayAtt     = stats?.today_attendance || (localDailyAtt || { total: 0, present: 0, absent: 0, rate: 0 });
+  const recentExams  = stats?.recent_exams || [];
+  const notices      = stats?.recent_notices || [];
+  const classesHTML = myClasses.length > 0
+    ? myClasses.slice(0, 6).map(cls =>
+        '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+        '<div class="flex items-center gap-3"><span style="color:var(--primary-500);">' + icon('academic', 20) + '</span>' +
+        '<div><div style="font-weight:600;font-size:.875rem;">' + (cls.name || 'Class') + (cls.section ? ' – Sec ' + cls.section : '') + (cls.stream ? ' (' + cls.stream + ')' : '') + '</div>' +
+        '<div class="text-xs text-secondary">' + (cls.student_count ?? 0) + ' students enrolled</div></div></div>' +
+        '<a href="#/attendance/mark" class="btn btn-xs btn-secondary" style="font-size:.75rem;padding:4px 10px;">Mark</a></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No classes assigned yet. Classes sync from database.</div>';
+  const examsHTML = recentExams.length > 0
+    ? recentExams.slice(0, 5).map(ex =>
+        '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+        '<div><div style="font-weight:600;font-size:.875rem;">' + (ex.name || ex.title || 'Exam') + '</div>' +
+        '<div class="text-xs text-secondary">' + (ex.exam_date || ex.date || '') + ' · ' + (ex.class_name || '') + '</div></div>' +
+        '<span class="badge badge-warning">' + (ex.status || 'Scheduled') + '</span></div>').join('')
+    : '';
+  const noticeHTML = notices.length > 0
+    ? notices.slice(0, 5).map(n =>
+        '<div class="p-3 rounded-md flex items-center gap-3" style="background:var(--bg-input);">' +
+        '<span style="color:var(--warning-500);">' + icon('megaphone', 18) + '</span>' +
+        '<div style="flex:1;"><div style="font-weight:600;font-size:.875rem;">' + (n.title || 'Notice') + '</div>' +
+        '<div class="text-xs text-secondary">' + formatActivityDate(n.created_at) + '</div></div></div>').join('')
+    : '';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Welcome, ' + (user?.name || 'Teacher') + '!</h1>' +
+    '<p class="subtitle">Your teaching overview — classes, attendance &amp; exam schedule</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/attendance/mark" class="btn btn-primary">' + icon('checkCircle', 18) + ' Mark Attendance</a>' +
+    '<a href="#/exams/marks" class="btn btn-secondary">' + icon('doc', 18) + ' Enter Marks</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('users', 24) + '</div>' +
+    '<div class="stat-value">' + myStudents + '</div><div class="stat-label">My Students</div>' +
+    '<span class="stat-change positive">Across ' + totalClasses + ' class' + (totalClasses !== 1 ? 'es' : '') + '</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon" style="background:rgba(16,185,129,.15);color:var(--success-500);">' + icon('checkCircle', 24) + '</div>' +
+    '<div class="stat-value">' + (todayAtt.rate ?? 0) + '%</div><div class="stat-label">Today\'s Attendance Rate</div>' +
+    '<span class="stat-change ' + ((todayAtt.rate ?? 0) >= 80 ? 'positive' : '') + '">' + (todayAtt.present ?? 0) + ' Present · ' + (todayAtt.absent ?? 0) + ' Absent</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(245,158,11,.15);color:var(--warning-500);">' + icon('book', 24) + '</div>' +
+    '<div class="stat-value">' + totalSubj + '</div><div class="stat-label">Total Subjects</div>' +
+    '<span class="stat-change positive">In curriculum</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:rgba(59,130,246,.15);color:var(--primary-500);">' + icon('doc', 24) + '</div>' +
+    '<div class="stat-value">' + examsMonth + '</div><div class="stat-label">Exams This Month</div>' +
+    '<span class="stat-change positive">Upcoming schedule</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">My Classes</span><span class="badge badge-primary">Live DB</span></div>' +
+    classesHTML + '</div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Quick Actions</span></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">' +
+    '<a href="#/attendance/mark" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('checkCircle', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">Mark Attendance</div><div class="text-xs text-secondary">Roll call</div></div></a>' +
+    '<a href="#/exams/marks" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('doc', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">Enter Marks</div><div class="text-xs text-secondary">Exam grading</div></div></a>' +
+    '<a href="#/attendance/qr" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--warning-600);">' + icon('qr', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">QR Attendance</div><div class="text-xs text-secondary">Scan mode</div></div></a>' +
+    '<a href="#/students/behavior" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--info-600);">' + icon('shield', 28) + '</span><div><div style="font-weight:600;font-size:.9rem;">Behavior Records</div><div class="text-xs text-secondary">Student conduct</div></div></a>' +
+    '</div></div></div>' +
+    ((recentExams.length > 0 || notices.length > 0) ?
+      '<div class="grid-2">' +
+      (recentExams.length > 0 ?
+        '<div class="card"><div class="card-header"><span class="card-title">Recent Exams</span><a href="#/exams" class="text-xs text-primary" style="font-weight:600;">All Exams</a></div>' +
+        '<div class="flex flex-col gap-2">' + examsHTML + '</div></div>' : '') +
+      (notices.length > 0 ?
+        '<div class="card"><div class="card-header"><span class="card-title">' + icon('megaphone', 18) + ' Notices</span><a href="#/notices" class="text-xs text-primary" style="font-weight:600;">View All</a></div>' +
+        '<div class="flex flex-col gap-2">' + noticeHTML + '</div></div>' : '') +
+      '</div>' : '') +
+    '</div>';
+}
+
+/* =====================================================
+   LIBRARIAN DASHBOARD
+   ===================================================== */
+function _renderLibrarianDashboard(user, stats, errorBanner) {
+  const totalBooks   = stats?.total_books ?? 0;
+  const issued       = stats?.books_issued ?? 0;
+  const returned     = stats?.books_returned ?? 0;
+  const overdue      = stats?.books_overdue ?? 0;
+  const members      = stats?.total_members ?? 0;
+  const recentIssues = stats?.recent_issues || [];
+  const categories   = stats?.books_by_category || [];
+  const notices      = stats?.recent_notices || [];
+  const issuesHTML = recentIssues.length > 0
+    ? recentIssues.slice(0, 7).map(issue =>
+        '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+        '<div class="flex items-center gap-3"><span style="color:' + (issue.status === 'overdue' ? 'var(--danger-500)' : issue.status === 'issued' ? 'var(--warning-500)' : 'var(--success-500)') + ';">' + icon('book', 20) + '</span>' +
+        '<div><div style="font-weight:600;font-size:.875rem;">' + (issue.book_title || 'Book') + (issue.isbn ? ' (' + issue.isbn + ')' : '') + '</div>' +
+        '<div class="text-xs text-secondary">' + ([issue.first_name, issue.last_name].filter(Boolean).join(' ') || 'Member') + ' · ' + formatActivityDate(issue.created_at) + '</div></div></div>' +
+        '<span class="badge badge-' + (issue.status === 'overdue' ? 'danger' : issue.status === 'issued' ? 'warning' : 'success') + '">' + (issue.status || 'issued') + '</span></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No book issues found in library database.</div>';
+  const colors = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316'];
+  const maxCnt = categories.length > 0 ? Math.max(...categories.map(c => c.cnt || 0), 1) : 1;
+  const catsHTML = categories.length > 0
+    ? categories.slice(0, 7).map((cat, i) => {
+        const pct = Math.round(((cat.cnt || 0) / maxCnt) * 100);
+        return '<div><div class="flex justify-between text-xs font-semibold mb-1"><span>' + (cat.category || 'General') + '</span><span>' + (cat.cnt || 0) + '</span></div>' +
+               '<div style="height:6px;background:var(--bg-tertiary);border-radius:3px;"><div style="height:6px;width:' + pct + '%;background:' + colors[i % colors.length] + ';border-radius:3px;transition:width .5s;"></div></div></div>';
+      }).join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No category data available yet.</div>';
+  const noticeHTML = notices.length > 0
+    ? notices.slice(0, 4).map(n =>
+        '<div class="p-3 rounded-md flex items-center gap-3" style="background:var(--bg-input);">' +
+        '<span style="color:var(--warning-500);">' + icon('megaphone', 18) + '</span>' +
+        '<div style="flex:1;"><div style="font-weight:600;font-size:.875rem;">' + (n.title || 'Notice') + '</div>' +
+        '<div class="text-xs text-secondary">' + formatActivityDate(n.created_at) + '</div></div></div>').join('')
+    : '';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Library Dashboard — ' + (user?.name || 'Librarian') + '</h1>' +
+    '<p class="subtitle">Book catalog, issue tracking &amp; overdue management</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/operations/library" class="btn btn-primary">' + icon('book', 18) + ' Manage Library</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('book', 24) + '</div>' +
+    '<div class="stat-value">' + totalBooks + '</div><div class="stat-label">Total Books in Catalog</div>' +
+    '<span class="stat-change positive">Live Library DB</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon" style="background:rgba(245,158,11,.15);color:var(--warning-500);">' + icon('arrowRight', 24) + '</div>' +
+    '<div class="stat-value">' + issued + '</div><div class="stat-label">Books Currently Issued</div>' +
+    '<span class="stat-change">' + returned + ' returned total</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(239,68,68,.15);color:var(--danger-500);">' + icon('calendar', 24) + '</div>' +
+    '<div class="stat-value" style="' + (overdue > 0 ? 'color:var(--danger-500)' : '') + '">' + overdue + '</div><div class="stat-label">Overdue Returns</div>' +
+    '<span class="stat-change ' + (overdue > 0 ? '' : 'positive') + '">' + (overdue > 0 ? '⚠ Action needed' : '✓ No overdues') + '</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:rgba(16,185,129,.15);color:var(--success-500);">' + icon('users', 24) + '</div>' +
+    '<div class="stat-value">' + members + '</div><div class="stat-label">Registered Members</div>' +
+    '<span class="stat-change positive">Active student members</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Recent Issues &amp; Returns</span><span class="badge badge-primary">Live DB</span></div>' +
+    issuesHTML + '</div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Books by Category</span></div>' +
+    '<div class="flex flex-col gap-3">' + catsHTML + '</div>' +
+    '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+    '<a href="#/operations/library" class="card card-hover flex items-center gap-3 p-3" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('book', 24) + '</span><div><div style="font-weight:600;font-size:.85rem;">Issue Book</div><div class="text-xs text-secondary">New checkout</div></div></a>' +
+    '<a href="#/operations/library" class="card card-hover flex items-center gap-3 p-3" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('arrowLeft', 24) + '</span><div><div style="font-weight:600;font-size:.85rem;">Return Book</div><div class="text-xs text-secondary">Process return</div></div></a>' +
+    '</div></div></div>' +
+    (notices.length > 0 ?
+      '<div class="card"><div class="card-header"><span class="card-title">' + icon('megaphone', 18) + ' Recent Notices</span><a href="#/notices" class="text-xs text-primary" style="font-weight:600;">View All</a></div>' +
+      '<div class="flex flex-col gap-2">' + noticeHTML + '</div></div>' : '') +
+    '</div>';
+}
+
+/* =====================================================
+   PARENT DASHBOARD
+   ===================================================== */
+function _renderParentDashboard(user, stats, errorBanner) {
+  const children      = stats?.children || [];
+  const attMap        = stats?.child_attendance || {};
+  const feeDues       = stats?.fee_dues ?? 0;
+  const feePaid       = stats?.fee_paid ?? 0;
+  const upcomingExams = stats?.upcoming_exams || [];
+  const notices       = stats?.recent_notices || [];
+  const totalChildren = stats?.total_children ?? children.length;
+  const attColor = (st) => !st || st === 'Not Marked' ? 'var(--text-tertiary)' : (st === 'Present' || st === 'Late') ? 'var(--success-500)' : 'var(--danger-500)';
+  const childrenHTML = children.length > 0
+    ? children.map(child => {
+        const attStatus = attMap[child.id] || 'Not Marked';
+        const cname = [child.first_name, child.last_name].filter(Boolean).join(' ') || child.name || 'Child';
+        const cls = child.class_name || (child.class_id ? 'Class ' + child.class_id : 'N/A');
+        return '<div class="p-4 rounded-md" style="background:var(--bg-input);">' +
+          '<div class="flex justify-between items-start mb-2"><div>' +
+          '<div style="font-weight:700;font-size:1rem;">' + cname + '</div>' +
+          '<div class="text-xs text-secondary">Adm: ' + (child.admission_no || 'N/A') + ' · ' + cls + '</div></div>' +
+          '<span style="font-weight:700;font-size:.85rem;color:' + attColor(attStatus) + ';">' + attStatus + '</span></div>' +
+          '<div class="flex gap-2 mt-2">' +
+          '<a href="#/attendance/report" class="btn btn-xs btn-secondary" style="font-size:.75rem;padding:3px 8px;">Attendance History</a>' +
+          '<a href="#/fees/collection" class="btn btn-xs btn-secondary" style="font-size:.75rem;padding:3px 8px;">Fee Details</a>' +
+          '<a href="#/exams/admit-card" class="btn btn-xs btn-secondary" style="font-size:.75rem;padding:3px 8px;">Admit Card</a></div></div>';
+      }).join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No children found linked to your account.</div>';
+  const examsHTML = upcomingExams.length > 0
+    ? upcomingExams.slice(0, 5).map(ex =>
+        '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+        '<div><div style="font-weight:600;font-size:.875rem;">' + (ex.name || ex.title || 'Exam') + '</div>' +
+        '<div class="text-xs text-secondary">' + (ex.exam_date || ex.date || 'Date TBD') + ' · ' + (ex.subject || ex.class_name || '') + '</div></div>' +
+        '<span class="badge badge-primary">Upcoming</span></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No upcoming exams scheduled.</div>';
+  const noticeHTML = notices.length > 0
+    ? notices.slice(0, 3).map(n =>
+        '<div class="p-3 rounded-md flex items-center gap-2 mb-2" style="background:var(--bg-input);">' +
+        '<span style="color:var(--warning-500);">' + icon('megaphone', 16) + '</span>' +
+        '<div><div style="font-weight:600;font-size:.8rem;">' + (n.title || 'Notice') + '</div>' +
+        '<div style="font-size:.72rem;color:var(--text-tertiary);">' + formatActivityDate(n.created_at) + '</div></div></div>').join('')
+    : '<div class="text-xs text-secondary p-2">No recent notices.</div>';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Welcome, ' + (user?.name || 'Parent') + '!</h1>' +
+    '<p class="subtitle">Track your child\'s attendance, fees, and upcoming exams</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/notices" class="btn btn-secondary">' + icon('megaphone', 18) + ' Notices</a>' +
+    '<a href="#/exams/admit-card" class="btn btn-primary">' + icon('doc', 18) + ' Admit Card</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('users', 24) + '</div>' +
+    '<div class="stat-value">' + totalChildren + '</div><div class="stat-label">My Children</div>' +
+    '<span class="stat-change positive">Enrolled at this school</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon" style="background:rgba(239,68,68,.15);color:var(--danger-500);">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value" style="' + (feeDues > 0 ? 'color:var(--danger-500)' : '') + '">₹' + Number(feeDues).toLocaleString('en-IN') + '</div><div class="stat-label">Pending Fee Dues</div>' +
+    '<span class="stat-change ' + (feeDues > 0 ? '' : 'positive') + '">' + (feeDues > 0 ? '⚠ Payment pending' : '✓ All dues cleared') + '</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(16,185,129,.15);color:var(--success-500);">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value">₹' + Number(feePaid).toLocaleString('en-IN') + '</div><div class="stat-label">Total Fees Paid</div>' +
+    '<span class="stat-change positive">This academic year</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:rgba(59,130,246,.15);color:var(--primary-500);">' + icon('doc', 24) + '</div>' +
+    '<div class="stat-value">' + upcomingExams.length + '</div><div class="stat-label">Upcoming Exams</div>' +
+    '<span class="stat-change positive">Scheduled this term</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">My Children — Today\'s Status</span><span class="badge badge-primary">Live DB</span></div>' +
+    '<div class="flex flex-col gap-3">' + childrenHTML + '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Upcoming Exams</span><a href="#/exams/admit-card" class="text-xs text-primary" style="font-weight:600;">Admit Card</a></div>' +
+    '<div class="flex flex-col gap-2">' + examsHTML + '</div>' +
+    '<div style="margin-top:16px;"><div class="card-header" style="padding:0 0 10px 0;"><span class="card-title" style="font-size:.85rem;">' + icon('megaphone', 16) + ' School Notices</span></div>' +
+    noticeHTML + '</div></div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Quick Links</span></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' +
+    '<a href="#/academics/timetable" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('calendar', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Timetable</div><div class="text-xs text-secondary">Class schedule</div></div></a>' +
+    '<a href="#/attendance/report" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('checkCircle', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Attendance</div><div class="text-xs text-secondary">History report</div></div></a>' +
+    '<a href="#/academics/downloads" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--warning-600);">' + icon('doc', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Downloads</div><div class="text-xs text-secondary">Study materials</div></div></a>' +
+    '<a href="#/operations/transport" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--info-600);">' + icon('truck', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Transport</div><div class="text-xs text-secondary">Bus routes</div></div></a>' +
+    '</div></div></div>';
+}
+
+/* =====================================================
+   STUDENT DASHBOARD
+   ===================================================== */
+function _renderStudentDashboard(user, stats, errorBanner) {
+  const student       = stats?.student || {};
+  const todayStatus   = stats?.today_status || 'Not Marked';
+  const attendance    = stats?.attendance || { total: 0, present: 0, absent: 0, rate: 0 };
+  const feeDues       = stats?.fee_dues ?? 0;
+  const upcomingExams = stats?.upcoming_exams || [];
+  const notices       = stats?.recent_notices || [];
+  const timetable     = stats?.timetable || [];
+  const attColor = (s) => !s || s === 'Not Marked' ? 'var(--text-tertiary)' : (s === 'Present' || s === 'Late') ? 'var(--success-500)' : 'var(--danger-500)';
+  const cls = student.class_name || (student.class_id ? 'Class ' + student.class_id : '');
+  const examsHTML = upcomingExams.length > 0
+    ? upcomingExams.slice(0, 5).map(ex =>
+        '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+        '<div><div style="font-weight:600;font-size:.875rem;">' + (ex.name || ex.title || 'Exam') + '</div>' +
+        '<div class="text-xs text-secondary">' + (ex.exam_date || ex.date || 'Date TBD') + ' · ' + (ex.subject || '') + '</div></div>' +
+        '<span class="badge badge-primary">Upcoming</span></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No upcoming exams scheduled.</div>';
+  const ttHTML = timetable.length > 0
+    ? timetable.slice(0, 5).map(t =>
+        '<div class="p-3 rounded-md flex items-center gap-3" style="background:var(--bg-input);">' +
+        '<div style="min-width:72px;font-size:.75rem;font-weight:700;color:var(--primary-600);">' + (t.start_time || '') + '</div>' +
+        '<div><div style="font-weight:600;font-size:.875rem;">' + (t.subject_name || t.subject || 'Subject') + '</div>' +
+        '<div class="text-xs text-secondary">' + (t.teacher_name || '') + '</div></div></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No timetable data found. Contact admin.</div>';
+  const noticeHTML = notices.length > 0
+    ? notices.slice(0, 5).map(n =>
+        '<div class="p-3 rounded-md flex items-center gap-3" style="background:var(--bg-input);">' +
+        '<span style="color:var(--warning-500);">' + icon('megaphone', 16) + '</span>' +
+        '<div><div style="font-weight:600;font-size:.85rem;">' + (n.title || 'Notice') + '</div>' +
+        '<div class="text-xs text-secondary">' + formatActivityDate(n.created_at) + '</div></div></div>').join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No recent notices.</div>';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Welcome, ' + (user?.name || 'Student') + '!</h1>' +
+    '<p class="subtitle">' + (cls ? cls + ' · ' : '') + 'Your personalized school dashboard</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/academics/timetable" class="btn btn-secondary">' + icon('calendar', 18) + ' My Timetable</a>' +
+    '<a href="#/exams/admit-card" class="btn btn-primary">' + icon('doc', 18) + ' Admit Card</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:0ms;"><div class="stat-icon" style="background:' + ((todayStatus === 'Present' || todayStatus === 'Late') ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.15)') + ';color:' + attColor(todayStatus) + ';">' + icon('checkCircle', 24) + '</div>' +
+    '<div class="stat-value" style="font-size:1.2rem;color:' + attColor(todayStatus) + ';">' + todayStatus + '</div><div class="stat-label">Today\'s Attendance</div>' +
+    '<span class="stat-change ' + ((todayStatus === 'Present' || todayStatus === 'Late') ? 'positive' : '') + '">' + new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }) + '</span></div>' +
+    '<div class="stat-card stat-primary animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon">' + icon('chart', 24) + '</div>' +
+    '<div class="stat-value">' + (attendance.rate ?? 0) + '%</div><div class="stat-label">Overall Attendance Rate</div>' +
+    '<span class="stat-change positive">' + (attendance.present ?? 0) + ' Present out of ' + (attendance.total ?? 0) + '</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(239,68,68,.15);color:var(--danger-500);">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value" style="' + (feeDues > 0 ? 'color:var(--danger-500)' : '') + '">₹' + Number(feeDues).toLocaleString('en-IN') + '</div><div class="stat-label">Pending Fee Dues</div>' +
+    '<span class="stat-change ' + (feeDues > 0 ? '' : 'positive') + '">' + (feeDues > 0 ? '⚠ Contact accounts' : '✓ No pending dues') + '</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:rgba(59,130,246,.15);color:var(--primary-500);">' + icon('doc', 24) + '</div>' +
+    '<div class="stat-value">' + upcomingExams.length + '</div><div class="stat-label">Upcoming Exams</div>' +
+    '<span class="stat-change positive">Prepare in advance</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Upcoming Exams</span><a href="#/exams/admit-card" class="text-xs text-primary" style="font-weight:600;">Admit Card</a></div>' +
+    '<div class="flex flex-col gap-2">' + examsHTML + '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Today\'s Timetable</span><a href="#/academics/timetable" class="text-xs text-primary" style="font-weight:600;">Full Schedule</a></div>' +
+    '<div class="flex flex-col gap-2">' + ttHTML + '</div></div></div>' +
+    '<div class="grid-2">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Quick Links</span></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">' +
+    '<a href="#/academics/timetable" class="card card-hover flex items-center gap-3 p-3" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('calendar', 24) + '</span><div><div style="font-weight:600;font-size:.85rem;">Timetable</div></div></a>' +
+    '<a href="#/academics/downloads" class="card card-hover flex items-center gap-3 p-3" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('doc', 24) + '</span><div><div style="font-weight:600;font-size:.85rem;">Downloads</div></div></a>' +
+    '<a href="#/academics/live-classes" class="card card-hover flex items-center gap-3 p-3" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--warning-600);">' + icon('video', 24) + '</span><div><div style="font-weight:600;font-size:.85rem;">Live Classes</div></div></a>' +
+    '<a href="#/operations/library" class="card card-hover flex items-center gap-3 p-3" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--info-600);">' + icon('book', 24) + '</span><div><div style="font-weight:600;font-size:.85rem;">Library</div></div></a>' +
+    '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">' + icon('megaphone', 18) + ' School Notices</span><a href="#/notices" class="text-xs text-primary" style="font-weight:600;">All</a></div>' +
+    '<div class="flex flex-col gap-2">' + noticeHTML + '</div></div>' +
+    '</div></div>';
+}
+
+/* =====================================================
+   ACCOUNTANT DASHBOARD
+   ===================================================== */
+function _renderAccountantDashboard(user, stats, localDailyAtt, errorBanner) {
+  const feesCollected = stats?.fees_collected ?? 0;
+  const feesDue       = stats?.fees_due ?? 0;
+  const feesThisMonth = stats?.fees_this_month ?? 0;
+  const totalInvoices = stats?.total_invoices ?? 0;
+  const totalIncome   = stats?.total_income ?? 0;
+  const totalExpense  = stats?.total_expense ?? 0;
+  const netBalance    = stats?.net_balance ?? (totalIncome - totalExpense);
+  const pendingCount  = stats?.pending_count ?? 0;
+  const monthlyFees   = (stats?.monthly_fees && stats.monthly_fees.length > 0) ? stats.monthly_fees : [
+    { month: 'Apr', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'May', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Jun', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Jul', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Aug', pct: 0, val: '₹0', collected: 0, target: 0 },
+    { month: 'Sep', pct: 0, val: '₹0', collected: 0, target: 0 },
+  ];
+  const recentPayments = stats?.recent_payments || [];
+  const feeBars = monthlyFees.map(item =>
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;">' +
+    '<span class="text-xs font-semibold" style="color:var(--success-600);">' + item.val + '</span>' +
+    '<div style="width:32px;height:' + Math.max(8, item.pct * 1.5) + 'px;background:linear-gradient(180deg,#10b981 0%,#a7f3d0 100%);border-radius:8px 8px 0 0;"></div>' +
+    '<span class="text-xs text-secondary" style="font-weight:600;">' + item.month + '</span></div>').join('');
+  const paymentsHTML = recentPayments.length > 0
+    ? recentPayments.slice(0, 6).map(p => {
+        const sname = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Student';
+        return '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+          '<div class="flex items-center gap-3"><span style="color:var(--success-500);">' + icon('banknotes', 18) + '</span>' +
+          '<div><div style="font-weight:600;font-size:.875rem;">' + sname + ' (' + (p.admission_no || 'N/A') + ')</div>' +
+          '<div class="text-xs text-secondary">' + (p.type || 'Fee') + (p.receipt_no ? ' · #' + p.receipt_no : '') + '</div></div></div>' +
+          '<div class="text-right"><div style="font-weight:700;color:var(--success-500);">₹' + Number(p.paid || 0).toLocaleString('en-IN') + '</div>' +
+          '<div class="text-xs text-secondary">' + formatActivityDate(p.created_at) + '</div></div></div>';
+      }).join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No payments recorded yet.</div>';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Finance Dashboard — ' + (user?.name || 'Accountant') + '</h1>' +
+    '<p class="subtitle">Fee collection, invoices &amp; financial ledger from live database</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/fees/collection" class="btn btn-primary">' + icon('banknotes', 18) + ' Collect Fees</a>' +
+    '<a href="#/finance/income-expense" class="btn btn-secondary">' + icon('chart', 18) + ' Ledger</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value">₹' + Number(feesCollected).toLocaleString('en-IN') + '</div><div class="stat-label">Total Fees Collected</div>' +
+    '<span class="stat-change positive">Live fee ledger</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon" style="background:rgba(16,185,129,.15);color:var(--success-500);">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value">₹' + Number(feesThisMonth).toLocaleString('en-IN') + '</div><div class="stat-label">Collection This Month</div>' +
+    '<span class="stat-change positive">' + totalInvoices + ' total invoices</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(239,68,68,.15);color:var(--danger-500);">' + icon('banknotes', 24) + '</div>' +
+    '<div class="stat-value" style="' + (feesDue > 0 ? 'color:var(--danger-500)' : '') + '">₹' + Number(feesDue).toLocaleString('en-IN') + '</div><div class="stat-label">Pending Dues</div>' +
+    '<span class="stat-change ' + (feesDue > 0 ? '' : 'positive') + '">' + pendingCount + ' students with dues</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:' + (netBalance >= 0 ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.15)') + ';color:' + (netBalance >= 0 ? 'var(--success-500)' : 'var(--danger-500)') + ';">' + icon('chart', 24) + '</div>' +
+    '<div class="stat-value" style="' + (netBalance < 0 ? 'color:var(--danger-500)' : '') + '">₹' + Math.abs(netBalance).toLocaleString('en-IN') + '</div><div class="stat-label">Net Balance</div>' +
+    '<span class="stat-change ' + (netBalance >= 0 ? 'positive' : '') + '">Income: ₹' + Number(totalIncome).toLocaleString('en-IN') + ' · Exp: ₹' + Number(totalExpense).toLocaleString('en-IN') + '</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Monthly Fee Revenue vs Target</span><span class="badge badge-success">Live Ledger</span></div>' +
+    '<div style="height:220px;display:flex;align-items:flex-end;justify-content:space-between;padding:20px 10px 0;border-bottom:2px solid var(--border-secondary);">' + feeBars + '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Recent Fee Payments</span><a href="#/fees/collection" class="text-xs text-primary" style="font-weight:600;">View All</a></div>' +
+    '<div class="flex flex-col gap-2">' + paymentsHTML + '</div></div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Quick Actions</span></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">' +
+    '<a href="#/fees/collection" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('banknotes', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Collect Fees</div><div class="text-xs text-secondary">Record payment</div></div></a>' +
+    '<a href="#/fees/structure" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('cog', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Fee Structure</div><div class="text-xs text-secondary">Configure rules</div></div></a>' +
+    '<a href="#/finance/income-expense" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--warning-600);">' + icon('chart', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Income &amp; Expense</div><div class="text-xs text-secondary">Financial ledger</div></div></a>' +
+    '<a href="#/reports" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--info-600);">' + icon('doc', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Finance Reports</div><div class="text-xs text-secondary">Export &amp; print</div></div></a>' +
+    '</div></div></div>';
+}
+
+/* =====================================================
+   RECEPTIONIST DASHBOARD
+   ===================================================== */
+function _renderReceptionistDashboard(user, stats, localDailyAtt, errorBanner) {
+  const totalStudents = stats?.total_students ?? 0;
+  const totalActive   = stats?.total_active ?? totalStudents;
+  const newAdmissions = stats?.new_admissions ?? 0;
+  const totalClasses  = stats?.total_classes ?? 0;
+  const recentAdm     = stats?.recent_admissions || [];
+  const notices       = stats?.recent_notices || [];
+  const todayAtt      = stats?.today_attendance || (localDailyAtt || { total: 0, present: 0, absent: 0, rate: 0 });
+  const admHTML = recentAdm.length > 0
+    ? recentAdm.slice(0, 7).map(s => {
+        const sname = [s.first_name, s.last_name].filter(Boolean).join(' ') || 'Student';
+        return '<div class="p-3 rounded-md flex justify-between items-center" style="background:var(--bg-input);">' +
+          '<div class="flex items-center gap-3">' +
+          '<div class="avatar-placeholder avatar-sm">' + sname.slice(0, 2).toUpperCase() + '</div>' +
+          '<div><div style="font-weight:600;font-size:.875rem;">' + sname + '</div>' +
+          '<div class="text-xs text-secondary">Adm: ' + (s.admission_no || 'N/A') + (s.class_id ? ' · Class ' + s.class_id : '') + (s.gender ? ' · ' + s.gender : '') + '</div></div></div>' +
+          '<div class="text-right"><span class="badge badge-' + (s.status === 'active' ? 'success' : 'warning') + '">' + (s.status || 'active') + '</span>' +
+          '<div class="text-xs text-secondary mt-1">' + formatActivityDate(s.created_at) + '</div></div></div>';
+      }).join('')
+    : '<div class="p-4 text-center text-sm text-secondary">No admissions recorded yet.</div>';
+  const noticeHTML = notices.length > 0
+    ? notices.slice(0, 4).map(n =>
+        '<div class="p-3 rounded-md flex items-center gap-2 mb-2" style="background:var(--bg-input);">' +
+        '<span style="color:var(--warning-500);">' + icon('megaphone', 16) + '</span>' +
+        '<div><div style="font-weight:600;font-size:.8rem;">' + (n.title || 'Notice') + '</div>' +
+        '<div style="font-size:.72rem;color:var(--text-tertiary);">' + formatActivityDate(n.created_at) + '</div></div></div>').join('')
+    : '<div class="text-xs text-secondary p-2">No recent notices.</div>';
+  return '<div class="animate-fadeIn">' +
+    '<div class="page-header"><div>' +
+    '<h1>Welcome, ' + (user?.name || 'Receptionist') + '!</h1>' +
+    '<p class="subtitle">Front desk overview — admissions &amp; daily attendance snapshot</p>' +
+    '</div><div class="flex gap-2">' +
+    '<a href="#/students/admission" class="btn btn-primary">' + icon('userPlus', 18) + ' New Admission</a>' +
+    '<a href="#/students" class="btn btn-secondary">' + icon('users', 18) + ' All Students</a>' +
+    '</div></div>' + errorBanner +
+    '<div class="grid-stats mb-6">' +
+    '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('users', 24) + '</div>' +
+    '<div class="stat-value">' + totalStudents + '</div><div class="stat-label">Total Enrolled Students</div>' +
+    '<span class="stat-change positive">' + totalActive + ' Active</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:60ms;"><div class="stat-icon" style="background:rgba(16,185,129,.15);color:var(--success-500);">' + icon('userPlus', 24) + '</div>' +
+    '<div class="stat-value">' + newAdmissions + '</div><div class="stat-label">New Admissions (This Month)</div>' +
+    '<span class="stat-change positive">Current month intake</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:120ms;"><div class="stat-icon" style="background:rgba(245,158,11,.15);color:var(--warning-500);">' + icon('checkCircle', 24) + '</div>' +
+    '<div class="stat-value">' + (todayAtt.rate ?? 0) + '%</div><div class="stat-label">Today\'s Attendance Rate</div>' +
+    '<span class="stat-change ' + ((todayAtt.rate ?? 0) >= 80 ? 'positive' : '') + '">' + (todayAtt.present ?? 0) + ' Present · ' + (todayAtt.absent ?? 0) + ' Absent</span></div>' +
+    '<div class="stat-card animate-slideUp" style="animation-delay:180ms;"><div class="stat-icon" style="background:rgba(59,130,246,.15);color:var(--primary-500);">' + icon('academic', 24) + '</div>' +
+    '<div class="stat-value">' + totalClasses + '</div><div class="stat-label">Total Classes</div>' +
+    '<span class="stat-change positive">Active sections</span></div>' +
+    '</div>' +
+    '<div class="grid-2 mb-6">' +
+    '<div class="card"><div class="card-header"><span class="card-title">Recent Admissions</span><a href="#/students" class="text-xs text-primary" style="font-weight:600;">View All</a></div>' +
+    '<div class="flex flex-col gap-2">' + admHTML + '</div></div>' +
+    '<div class="card"><div class="card-header"><span class="card-title">Quick Actions</span></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
+    '<a href="#/students/admission" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--primary-600);">' + icon('userPlus', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">New Admission</div><div class="text-xs text-secondary">Enroll student</div></div></a>' +
+    '<a href="#/students" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--success-600);">' + icon('users', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Student Directory</div><div class="text-xs text-secondary">Search records</div></div></a>' +
+    '<a href="#/attendance/qr" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--warning-600);">' + icon('qr', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">QR Check-in</div><div class="text-xs text-secondary">Scan attendance</div></div></a>' +
+    '<a href="#/notices" class="card card-hover flex items-center gap-3 p-4" style="background:var(--bg-secondary);border-radius:var(--radius-md);"><span style="color:var(--info-600);">' + icon('megaphone', 26) + '</span><div><div style="font-weight:600;font-size:.85rem;">Notices</div><div class="text-xs text-secondary">Announcements</div></div></a>' +
+    '</div>' +
+    '<div class="card-header" style="padding:0 0 10px 0;"><span class="card-title" style="font-size:.85rem;">' + icon('megaphone', 16) + ' Recent Notices</span></div>' +
+    noticeHTML + '</div></div></div>';
+}
+
+
 
 /* ---- Students Directory ---- */
 const demoStudents = [
