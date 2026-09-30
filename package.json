@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "pdf-parse": "^2.4.5",
-    "puppeteer-core": "^25.12.0",
-    "ws": "^8.22.0"
-  }
-}

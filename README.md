@@ -6,10 +6,9 @@ Complete, end-to-end Enterprise School Management System supporting all **45 mod
 ---
 
 > [!TIP]
-> **Deployment & Documentation Guides:**
-> - 🚀 **Render Cloud Deployment:** [RENDER_DEPLOYMENT_GUIDE.md](file:///c:/Users/RUPAM/OneDrive/Desktop/Smart-School-Management-System/RENDER_DEPLOYMENT_GUIDE.md) — 1-click Docker Web Service on Render Free Tier.
-> - 🌐 **cPanel Shared Hosting:** [CPANEL_DEPLOYMENT_GUIDE.md](file:///c:/Users/RUPAM/OneDrive/Desktop/Smart-School-Management-System/CPANEL_DEPLOYMENT_GUIDE.md) — Apache, mod_rewrite, MySQL import.
-> - 📄 **Comprehensive Engineering Report:** [SMART_SCHOOL_PROJECT_REPORT.md](file:///c:/Users/RUPAM/OneDrive/Desktop/Smart-School-Management-System/SMART_SCHOOL_PROJECT_REPORT.md) & [PDF Edition](file:///c:/Users/RUPAM/OneDrive/Desktop/Smart-School-Management-System/Smart_School_Project_Report_v2.pdf).
+> **Deployment Guide:**
+> - 🌐 **cPanel Deployment:** [CPANEL_DEPLOYMENT_GUIDE.md](file:///c:/Users/RUPAM/OneDrive/Desktop/Smart-School-Management-System/CPANEL_DEPLOYMENT_GUIDE.md) — Step-by-step Apache, MySQL phpMyAdmin import, and `.env` configuration.
+> - 📦 **Instant Deployment Archive:** `smart_school_cpanel_ready.zip` (Pre-compressed, ready to upload & extract directly into `public_html`).
 
 ---
 

@@ -36,13 +36,9 @@ const getApiBase = () => {
     }
 
     // Live cPanel production deployment (subdomain, domain or subfolder)
-    const pathname = window.location.pathname;
-    if (pathname.includes('/frontend')) {
-      const baseDir = pathname.substring(0, pathname.indexOf('/frontend'));
-      return window.location.origin + baseDir + '/api';
-    }
-
-    return window.location.origin + '/api';
+    let path = window.location.pathname || '';
+    path = path.replace(/\/index\.(html|php)$/i, '').replace(/\/frontend(\/.*)?$/i, '').replace(/\/$/, '');
+    return window.location.origin + path + '/api';
   }
   return 'http://localhost:8000/api';
 };

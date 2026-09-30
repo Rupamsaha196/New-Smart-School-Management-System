@@ -27,10 +27,29 @@ echo "    INFOSOF TECHNOLOGIES 2026 - MYSQL 8 / RENDER CLOUD DEPLOYMENT      \n"
 echo "    Engine: v2.1 (SSL/TLS Encrypted Transport)                         \n";
 echo "========================================================================\n\n";
 
+// Auto-load .env configuration if present
+$env_file = __DIR__ . '/.env';
+if (file_exists($env_file)) {
+    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line !== '' && strpos($line, '#') !== 0 && strpos($line, '=') !== false) {
+            list($key, $val) = explode('=', $line, 2);
+            $key = trim($key);
+            $val = trim($val, " \t\n\r\0\x0B\"'");
+            if (!isset($_SERVER[$key]) && !isset($_ENV[$key])) {
+                putenv("{$key}={$val}");
+                $_ENV[$key] = $val;
+                $_SERVER[$key] = $val;
+            }
+        }
+    }
+}
+
 // 1. Resolve Database Credentials from Environment (or URL query override)
-$host     = trim($_GET['db_host'] ?? (getenv('DB_HOST') ?: '127.0.0.1'));
+$host     = trim($_GET['db_host'] ?? (getenv('DB_HOST') ?: 'localhost'));
 $port     = trim($_GET['db_port'] ?? (getenv('DB_PORT') ?: 3306));
-$database = trim($_GET['db_name'] ?? (getenv('DB_DATABASE') ?: 'test'));
+$database = trim($_GET['db_name'] ?? (getenv('DB_DATABASE') ?: 'smart_school'));
 $username = trim($_GET['db_user'] ?? (getenv('DB_USERNAME') ?: 'root'));
 $password = trim($_GET['db_pass'] ?? (getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : ''));
 
@@ -83,15 +102,18 @@ foreach ($db_candidates as $db_target) {
             PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
         ];
 
-        // Force TLS/SSL transport for cloud MySQL providers (TiDB Serverless, Aiven, etc.)
-        $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
-        if (file_exists($ca_bundle)) {
-            $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
-        } else {
-            $pdo_options[PDO::MYSQL_ATTR_SSL_CAPATH] = '/etc/ssl/certs';
-        }
-        if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
-            $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+        // Enable TLS/SSL transport for cloud MySQL providers (TiDB, AWS RDS, etc.) if not local
+        $is_local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', '']);
+        if (!$is_local || getenv('DB_SSL') === 'true') {
+            $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
+            if (file_exists($ca_bundle)) {
+                $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
+            } elseif (file_exists('/etc/pki/tls/certs/ca-bundle.crt')) {
+                $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/pki/tls/certs/ca-bundle.crt';
+            }
+            if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+                $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+            }
         }
 
         $pdo = new PDO($dsn, $username, $password, $pdo_options);

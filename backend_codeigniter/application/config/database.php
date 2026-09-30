@@ -32,10 +32,10 @@ $query_builder = TRUE;
 
 $db['default'] = [
     'dsn'          => '',
-    'hostname'     => getenv('DB_HOST') ?: '127.0.0.1',
+    'hostname'     => getenv('DB_HOST') ?: 'localhost',
     'port'         => getenv('DB_PORT') ?: 3306,
     'username'     => getenv('DB_USERNAME') ?: 'root',
-    'password'     => getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '0',
+    'password'     => getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '',
     'database'     => getenv('DB_DATABASE') ?: 'smart_school',
     'dbdriver'     => 'pdo',
     'dbprefix'     => '',
