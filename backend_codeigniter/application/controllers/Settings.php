@@ -140,4 +140,164 @@ class Settings extends REST_Controller {
             'google_email' => $google_email
         ], "Google OAuth linked successfully ({$google_email}) for Two-Factor Authentication");
     }
+
+    public function backup_export(): void {
+        $user = $this->get_auth_user();
+        if ($user) {
+            $role = strtolower($user['role'] ?? '');
+            if ($role !== 'super_admin' && $role !== 'admin') {
+                $this->error('Access denied: Only administrators can export system database backups.', 403);
+                return;
+            }
+        }
+
+        $tables = $this->db->list_tables();
+        $sql = "-- ==========================================================================\n";
+        $sql .= "-- SMART SCHOOL MANAGEMENT SYSTEM - AUTOMATED SQL BACKUP DUMP\n";
+        $sql .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
+        $sql .= "-- Tables: " . count($tables) . "\n";
+        $sql .= "-- ==========================================================================\n\n";
+        $sql .= "SET FOREIGN_KEY_CHECKS = 0;\n\n";
+
+        foreach ($tables as $tbl) {
+            $sql .= "DROP TABLE IF EXISTS `{$tbl}`;\n";
+            $create = $this->db->query("SHOW CREATE TABLE `{$tbl}`")->row_array();
+            $sql .= ($create['Create Table'] ?? '') . ";\n\n";
+
+            $rows = $this->db->get($tbl)->result_array();
+            if (!empty($rows)) {
+                $cols = "`" . implode("`, `", array_keys($rows[0])) . "`";
+                $val_lines = [];
+                foreach ($rows as $r) {
+                    $vals = [];
+                    foreach ($r as $v) {
+                        $vals[] = ($v === null) ? 'NULL' : $this->db->escape($v);
+                    }
+                    $val_lines[] = "(" . implode(", ", $vals) . ")";
+                }
+                $sql .= "INSERT INTO `{$tbl}` ({$cols}) VALUES\n  " . implode(",\n  ", $val_lines) . ";\n\n";
+            }
+        }
+        $sql .= "SET FOREIGN_KEY_CHECKS = 1;\n";
+
+        $filename = "smart_school_backup_" . date('Y_m_d_His') . ".sql";
+        header('Content-Type: application/sql');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($sql));
+        echo $sql;
+        exit;
+    }
+
+    public function backup_restore(): void {
+        $user = $this->get_auth_user();
+        if ($user) {
+            $role = strtolower($user['role'] ?? '');
+            if ($role !== 'super_admin' && $role !== 'admin') {
+                $this->error('Access denied: Only administrators can restore system database backups.', 403);
+                return;
+            }
+        }
+
+        $payload = $this->get_payload();
+        $sql = $payload['sql'] ?? '';
+        if (empty($sql) && !empty($_FILES['backup_file']['tmp_name'])) {
+            $sql = file_get_contents($_FILES['backup_file']['tmp_name']);
+        }
+
+        if (empty(trim($sql))) {
+            $this->error('SQL backup dump content or file is required for restoration.', 422);
+            return;
+        }
+
+        $lines = explode("\n", $sql);
+        $queries = [];
+        $current = '';
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || strpos($trimmed, '--') === 0 || strpos($trimmed, '/*') === 0) continue;
+            $current .= $line . "\n";
+            if (substr($trimmed, -1) === ';') {
+                $queries[] = $current;
+                $current = '';
+            }
+        }
+        if (!empty(trim($current))) $queries[] = $current;
+
+        $this->db->trans_begin();
+        $this->db->query("SET FOREIGN_KEY_CHECKS = 0;");
+        $executed = 0;
+
+        try {
+            foreach ($queries as $q) {
+                $t = trim($q);
+                if ($t === '') continue;
+                $this->db->query($t);
+                $executed++;
+            }
+            $this->db->query("SET FOREIGN_KEY_CHECKS = 1;");
+
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                $this->error('Database restoration failed: Rolled back completely to prevent data corruption.', 500);
+                return;
+            }
+            $this->db->trans_commit();
+            $this->success(['queries_executed' => $executed], 'Database restored successfully from backup.');
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            $this->db->query("SET FOREIGN_KEY_CHECKS = 1;");
+            $this->error('Database restoration failed & rolled back: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function backup_verify(): void {
+        $user = $this->get_auth_user();
+        if ($user) {
+            $role = strtolower($user['role'] ?? '');
+            if ($role !== 'super_admin' && $role !== 'admin') {
+                $this->error('Access denied: Only administrators can run database integrity audits.', 403);
+                return;
+            }
+        }
+
+        $audit = [
+            'orphan_attendance' => 0,
+            'orphan_student_fees' => 0,
+            'orphan_student_hostels' => 0,
+            'total_tables' => 0,
+            'foreign_keys_intact' => true,
+            'status' => 'HEALTHY'
+        ];
+
+        try {
+            $audit['total_tables'] = count($this->db->list_tables());
+
+            // Check orphan attendances
+            if ($this->db->table_exists('attendances') && $this->db->table_exists('students')) {
+                $q = $this->db->query("SELECT COUNT(*) AS cnt FROM attendances a LEFT JOIN students s ON a.student_id = s.id WHERE s.id IS NULL AND a.student_id IS NOT NULL");
+                $audit['orphan_attendance'] = (int)($q->row()->cnt ?? 0);
+            }
+
+            // Check orphan student fees
+            if ($this->db->table_exists('student_fees') && $this->db->table_exists('students')) {
+                $q = $this->db->query("SELECT COUNT(*) AS cnt FROM student_fees sf LEFT JOIN students s ON sf.student_id = s.id WHERE s.id IS NULL AND sf.student_id IS NOT NULL");
+                $audit['orphan_student_fees'] = (int)($q->row()->cnt ?? 0);
+            }
+
+            // Check orphan student hostels
+            if ($this->db->table_exists('student_hostels') && $this->db->table_exists('students')) {
+                $q = $this->db->query("SELECT COUNT(*) AS cnt FROM student_hostels sh LEFT JOIN students s ON sh.student_id = s.id WHERE s.id IS NULL AND sh.student_id IS NOT NULL");
+                $audit['orphan_student_hostels'] = (int)($q->row()->cnt ?? 0);
+            }
+
+            $total_orphans = $audit['orphan_attendance'] + $audit['orphan_student_fees'] + $audit['orphan_student_hostels'];
+            if ($total_orphans > 0) {
+                $audit['status'] = 'WARNING_ORPHANS_DETECTED';
+            }
+
+            $this->success($audit, 'Database integrity audit completed successfully.');
+        } catch (\Throwable $e) {
+            $this->error('Integrity audit encountered an error: ' . $e->getMessage(), 500);
+        }
+    }
 }

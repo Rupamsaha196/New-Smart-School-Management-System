@@ -129,10 +129,16 @@ $route['api/calendar-events/(:num)']        = 'operations/destroy_calendar_event
 // ── Reports ──────────────────────────────────────────────────────────
 $route['api/reports']                       = 'reports/index';
 
-// ── Settings ─────────────────────────────────────────────────────────
+// ── Settings & Backup ──────────────────────────────────────────────────
 $route['api/settings']                      = 'settings/index';
 $route['api/settings/update']               = 'settings/update';
 $route['api/settings/add-campus']           = 'settings/add_campus';
+$route['api/settings/backup']               = 'settings/backup_export';
+$route['api/settings/restore']              = 'settings/backup_restore';
+$route['api/settings/verify']               = 'settings/backup_verify';
+$route['api/backup/export']                 = 'settings/backup_export';
+$route['api/backup/restore']                = 'settings/backup_restore';
+$route['api/backup/verify']                 = 'settings/backup_verify';
 $route['api/custom-fields']                 = 'settings/custom_fields';
 
 // ── Front Website ────────────────────────────────────────────────────

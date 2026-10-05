@@ -30,8 +30,25 @@ class Fees extends REST_Controller {
         $payload = $this->get_payload();
         $student_id  = (int)(!empty($payload['student_id']) ? $payload['student_id'] : ($this->input->post('student_id') ?: 1));
         $amount      = floatval(!empty($payload['amount']) ? $payload['amount'] : ($this->input->post('amount') ?: 12500));
-        $type        = !empty($payload['type']) ? $payload['type'] : ($this->input->post('type') ?: 'Tuition Fee (Quarterly)');
+        $type        = trim(!empty($payload['type']) ? $payload['type'] : ($this->input->post('type') ?: 'Tuition Fee (Quarterly)'));
         $collect_now = isset($payload['collect_now']) ? (bool)$payload['collect_now'] : (bool)$this->input->post('collect_now');
+
+        // Boundary Validation
+        if ($amount <= 0) {
+            $this->error('Fee invoice amount must be a positive number greater than 0.', 422);
+            return;
+        }
+        if ($amount > 10000000) {
+            $this->error('Fee invoice amount exceeds maximum permissible limit (₹1,00,00,000).', 422);
+            return;
+        }
+
+        // Foreign Key Check: Verify student exists
+        $student = $this->db->where('id', $student_id)->get('students')->row_array();
+        if (!$student) {
+            $this->error("Foreign key constraint: Student ID {$student_id} does not exist in database.", 404);
+            return;
+        }
 
         // Duplicate Check: Check if an identical fee invoice already exists in Pending status
         $existing_fee = $this->db->where([
@@ -44,8 +61,21 @@ class Fees extends REST_Controller {
             return;
         }
 
-        $fee_id = $this->fee_model->quick_create($student_id, $amount, $type, $collect_now);
-        $this->success(['fee_id' => $fee_id], 'Quick fee invoice generated successfully', 201);
+        // Transactional Execution
+        $this->db->trans_begin();
+        try {
+            $fee_id = $this->fee_model->quick_create($student_id, $amount, $type, $collect_now);
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                $this->error('Transaction error: Failed to generate fee invoice.', 500);
+                return;
+            }
+            $this->db->trans_commit();
+            $this->success(['fee_id' => $fee_id], 'Quick fee invoice generated successfully', 201);
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            $this->error('Invoice generation failed: ' . $e->getMessage(), 500);
+        }
     }
 
     public function thermal_receipt(int $id): void {

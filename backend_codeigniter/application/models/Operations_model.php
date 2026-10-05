@@ -110,9 +110,16 @@ class Operations_model extends CI_Model {
         return $this->db->delete('transport_routes', ['id' => $id]);
     }
 
-    public function issue_book(array $data): int {
+    public function issue_book(array $data): ?int {
+        $book_id = (int)($data['book_id'] ?? 1);
+        $book = $this->db->where('id', $book_id)->get('library_books')->row_array();
+        if (!$book || (int)$book['available_qty'] <= 0) {
+            return null;
+        }
+
+        $this->db->trans_begin();
         $clean = [
-            'book_id'      => (int)($data['book_id'] ?? 1),
+            'book_id'      => $book_id,
             'student_id'   => !empty($data['student_id']) ? (int)$data['student_id'] : null,
             'student_name' => $data['student_name'] ?? 'Student',
             'issue_date'   => $data['issue_date'] ?? date('Y-m-d'),
@@ -125,8 +132,13 @@ class Operations_model extends CI_Model {
         $issue_id = $this->db->insert_id();
 
         // Decrement available_qty in library_books
-        $this->db->query("UPDATE library_books SET available_qty = GREATEST(available_qty - 1, 0) WHERE id = ?", [(int)$clean['book_id']]);
+        $this->db->query("UPDATE library_books SET available_qty = GREATEST(available_qty - 1, 0) WHERE id = ?", [$book_id]);
 
+        if ($this->db->trans_status() === FALSE) {
+            $this->db->trans_rollback();
+            return null;
+        }
+        $this->db->trans_commit();
         return $issue_id;
     }
 
@@ -140,13 +152,21 @@ class Operations_model extends CI_Model {
 
     public function return_book(int $issue_id): bool {
         $issue = $this->db->where('id', $issue_id)->get('book_issues')->row_array();
-        if (!$issue) return false;
+        if (!$issue || $issue['status'] === 'Returned') return false;
+
+        $this->db->trans_begin();
         $this->db->where('id', $issue_id)->update('book_issues', [
             'status'      => 'Returned',
             'return_date' => date('Y-m-d'),
             'updated_at'  => date('Y-m-d H:i:s'),
         ]);
         $this->db->query("UPDATE library_books SET available_qty = LEAST(available_qty + 1, qty) WHERE id = ?", [(int)$issue['book_id']]);
+
+        if ($this->db->trans_status() === FALSE) {
+            $this->db->trans_rollback();
+            return false;
+        }
+        $this->db->trans_commit();
         return true;
     }
 

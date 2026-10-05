@@ -17,9 +17,41 @@ class Students extends REST_Controller {
 
     public function store(): void {
         $payload = $this->get_payload();
-        if (empty($payload['first_name'])) {
-            $this->error('Student first name is required', 422);
+
+        // 1. Server-Side Boundary & Null/Empty Validation
+        $firstName = trim($payload['first_name'] ?? '');
+        $lastName  = trim($payload['last_name'] ?? '');
+        if (empty($firstName)) {
+            $this->error('Student first name is required and cannot be empty.', 422);
             return;
+        }
+        if (strlen($firstName) > 100 || strlen($lastName) > 100) {
+            $this->error('Student name components must not exceed 100 characters in length.', 422);
+            return;
+        }
+
+        // DOB boundary validation (cannot be in the future)
+        if (!empty($payload['dob'])) {
+            $dobTime = strtotime($payload['dob']);
+            if (!$dobTime || $dobTime > time()) {
+                $this->error('Date of birth cannot be a future date.', 422);
+                return;
+            }
+        }
+
+        // Email format validation
+        if (!empty($payload['email'])) {
+            $email = trim($payload['email']);
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $this->error("Invalid email address format: '{$email}'.", 422);
+                return;
+            }
+            // Duplicate Check: Email Address
+            $existing = $this->db->where('LOWER(email)', strtolower($email))->get('students')->row_array();
+            if ($existing) {
+                $this->error("Duplicate entry: A student with email '{$email}' already exists.", 409);
+                return;
+            }
         }
 
         // Duplicate Check 1: Admission Number
@@ -34,17 +66,7 @@ class Students extends REST_Controller {
             $payload['admission_no'] = 'SS' . date('Y') . str_pad((string)rand(10, 999), 3, '0', STR_PAD_LEFT);
         }
 
-        // Duplicate Check 2: Email Address
-        if (!empty($payload['email'])) {
-            $email = trim($payload['email']);
-            $existing = $this->db->where('email', $email)->get('students')->row_array();
-            if ($existing) {
-                $this->error("Duplicate entry: A student with email '{$email}' already exists.", 409);
-                return;
-            }
-        }
-
-        // Duplicate Check 3: Roll Number in same Class/Section
+        // Duplicate Check 2: Roll Number in same Class/Section
         if (!empty($payload['roll_no']) && !empty($payload['class_id'])) {
             $roll = trim($payload['roll_no']);
             $this->db->where('roll_no', $roll);
@@ -60,18 +82,28 @@ class Students extends REST_Controller {
             }
         }
 
-        $id = $this->student_model->create_student($payload);
-
-        // Auto-create initial quarterly fee invoice for the student
+        // 2. Atomic Database Transaction
+        $this->db->trans_begin();
         try {
+            $id = $this->student_model->create_student($payload);
+
+            // Auto-create initial quarterly fee invoice for the student
             $this->load->model('Fee_model', 'fee_model');
             $this->fee_model->quick_create($id, 12500, 'Tuition Fee (Quarterly)', false);
-        } catch (Throwable $e) {
-            log_message('error', 'Auto fee create error: ' . $e->getMessage());
-        }
 
-        $student = $this->student_model->find($id);
-        $this->success($student, 'Student admitted successfully', 201);
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                $this->error('Database transaction error: Student enrollment rolled back.', 500);
+                return;
+            }
+
+            $this->db->trans_commit();
+            $student = $this->student_model->find($id);
+            $this->success($student, 'Student admitted successfully', 201);
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            $this->error('Enrollment transaction failed: ' . $e->getMessage(), 500);
+        }
     }
 
     public function show(int $id): void {
@@ -120,6 +152,15 @@ class Students extends REST_Controller {
 
         $payload = $this->get_payload();
 
+        // Concurrent Edit Check (Optimistic Concurrency Control)
+        if (!empty($payload['expected_updated_at'])) {
+            $current = $this->student_model->find($id);
+            if ($current && !empty($current['updated_at']) && $current['updated_at'] !== $payload['expected_updated_at']) {
+                $this->error("Concurrent edit conflict: Record was updated by another session at {$current['updated_at']}. Please reload before updating.", 409);
+                return;
+            }
+        }
+
         // Check duplicate admission number if changing
         if (!empty($payload['admission_no'])) {
             $adm = trim($payload['admission_no']);
@@ -133,16 +174,32 @@ class Students extends REST_Controller {
         // Check duplicate email if changing
         if (!empty($payload['email'])) {
             $email = trim($payload['email']);
-            $existing = $this->db->where('email', $email)->where('id !=', $id)->get('students')->row_array();
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $this->error("Invalid email address format: '{$email}'.", 422);
+                return;
+            }
+            $existing = $this->db->where('LOWER(email)', strtolower($email))->where('id !=', $id)->get('students')->row_array();
             if ($existing) {
                 $this->error("Duplicate entry: Student email '{$email}' is already registered to another student.", 409);
                 return;
             }
         }
 
-        $this->student_model->update_student($id, $payload);
-        $student = $this->student_model->find($id);
-        $this->success($student, 'Student record updated successfully');
+        $this->db->trans_begin();
+        try {
+            $this->student_model->update_student($id, $payload);
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                $this->error('Failed to update student due to database transaction error.', 500);
+                return;
+            }
+            $this->db->trans_commit();
+            $student = $this->student_model->find($id);
+            $this->success($student, 'Student record updated successfully');
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            $this->error('Update transaction failed: ' . $e->getMessage(), 500);
+        }
     }
 
     public function destroy(int $id): void {
@@ -154,8 +211,27 @@ class Students extends REST_Controller {
                 return;
             }
         }
-        $this->student_model->delete_student($id);
-        $this->success(null, 'Student record deleted');
+
+        // Safe Transactional Deletion to prevent orphan child records
+        $this->db->trans_begin();
+        try {
+            $this->db->delete('student_fees', ['student_id' => $id]);
+            $this->db->delete('attendances', ['student_id' => $id]);
+            $this->db->delete('student_hostels', ['student_id' => $id]);
+            $this->db->delete('student_notes', ['student_id' => $id]);
+            $this->student_model->delete_student($id);
+
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                $this->error('Database rollback: Unable to complete student deletion.', 500);
+                return;
+            }
+            $this->db->trans_commit();
+            $this->success(null, 'Student record and child dependencies removed cleanly without orphan records');
+        } catch (\Throwable $e) {
+            $this->db->trans_rollback();
+            $this->error('Deletion transaction failed: ' . $e->getMessage(), 500);
+        }
     }
 
     public function tc(int $id): void {

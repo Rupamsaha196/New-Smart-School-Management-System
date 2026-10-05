@@ -80,7 +80,18 @@ class Operations extends REST_Controller {
         $payload = $this->get_payload();
         $title = trim($payload['title'] ?? '');
         if (empty($title)) {
-            $this->error('Book title is required', 422);
+            $this->error('Book title is required and cannot be empty.', 422);
+            return;
+        }
+
+        // Boundary Validation
+        $qty = intval($payload['qty'] ?? 1);
+        if ($qty <= 0) {
+            $this->error('Book quantity must be at least 1.', 422);
+            return;
+        }
+        if ($qty > 10000) {
+            $this->error('Book quantity exceeds maximum catalog limit (10,000).', 422);
             return;
         }
 
@@ -117,6 +128,10 @@ class Operations extends REST_Controller {
             return;
         }
         $id = $this->ops->issue_book($payload);
+        if (!$id) {
+            $this->error('Cannot issue book: Book not found or 0 available copies remain in inventory.', 422);
+            return;
+        }
         $this->success(['id' => $id], 'Book issued successfully', 201);
     }
 
@@ -124,9 +139,16 @@ class Operations extends REST_Controller {
         $payload = $this->get_payload();
         $routeName = trim($payload['route_name'] ?? ($payload['route_title'] ?? ($payload['title'] ?? '')));
         $vehicleNo = trim($payload['vehicle_no'] ?? '');
+        $fare = floatval($payload['fare'] ?? 2000);
 
         if (empty($routeName)) {
-            $this->error('Route name is required', 422);
+            $this->error('Route name is required and cannot be empty.', 422);
+            return;
+        }
+
+        // Boundary check on fare
+        if ($fare < 0 || $fare > 100000) {
+            $this->error('Transport fare must be between ₹0 and ₹1,00,000.', 422);
             return;
         }
 
@@ -164,8 +186,16 @@ class Operations extends REST_Controller {
     public function store_hostel(): void {
         $payload = $this->get_payload();
         $name = trim($payload['name'] ?? ($payload['hostel_name'] ?? ''));
+        $capacity = intval($payload['capacity'] ?? ($payload['intake'] ?? 50));
+
         if (empty($name)) {
-            $this->error('Hostel name is required', 422);
+            $this->error('Hostel name is required and cannot be empty.', 422);
+            return;
+        }
+
+        // Boundary check on bed capacity
+        if ($capacity <= 0 || $capacity > 5000) {
+            $this->error('Hostel capacity must be between 1 and 5,000 beds.', 422);
             return;
         }
 
