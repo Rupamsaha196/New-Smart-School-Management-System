@@ -52,9 +52,12 @@ $route['api/transactions/store']            = 'finance/store_transaction';
 
 // ── Razorpay Payment Gateway ──────────────────────────────────────────
 $route['api/razorpay/create-order']         = 'razorpay/create_order';
+$route['api/razorpay/order']                = 'razorpay/create_order';
 $route['api/razorpay/verify']               = 'razorpay/verify';
 $route['api/razorpay/config']               = 'razorpay/config_key';
+$route['api/razorpay/status']               = 'razorpay/config_key';
 $route['api/razorpay/save-keys']            = 'razorpay/save_config';
+$route['api/razorpay/test-connection']      = 'razorpay/test_connection';
 
 // ── Attendance & QR Attendance ───────────────────────────────────────
 $route['api/attendance']                    = 'attendance/index';
