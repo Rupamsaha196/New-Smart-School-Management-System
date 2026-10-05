@@ -33,6 +33,17 @@ class Fees extends REST_Controller {
         $type        = !empty($payload['type']) ? $payload['type'] : ($this->input->post('type') ?: 'Tuition Fee (Quarterly)');
         $collect_now = isset($payload['collect_now']) ? (bool)$payload['collect_now'] : (bool)$this->input->post('collect_now');
 
+        // Duplicate Check: Check if an identical fee invoice already exists in Pending status
+        $existing_fee = $this->db->where([
+            'student_id' => $student_id,
+            'title'      => $type,
+            'status'     => 'Pending',
+        ])->get('student_fees')->row_array();
+        if ($existing_fee) {
+            $this->error("Duplicate entry: A pending fee invoice for '{$type}' already exists for this student (Invoice #{$existing_fee['id']}).", 409);
+            return;
+        }
+
         $fee_id = $this->fee_model->quick_create($student_id, $amount, $type, $collect_now);
         $this->success(['fee_id' => $fee_id], 'Quick fee invoice generated successfully', 201);
     }

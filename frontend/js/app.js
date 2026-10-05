@@ -2695,6 +2695,41 @@ function bindAdmissionEvents() {
       status: 'active',
     };
 
+    // Client-side Duplicate Pre-Check
+    const existingList = (window.SS_STORE && window.SS_STORE.get('students')) || JSON.parse(localStorage.getItem('local_students') || '[]');
+    if (Array.isArray(existingList)) {
+      if (payload.roll_no) {
+        const rollDup = existingList.find(s => 
+          String(s.id) !== String(editId || '') &&
+          String(s.roll_no || '').trim() === payload.roll_no &&
+          String(s.class_id || s.class_name || '') === String(payload.class_id) &&
+          String(s.section || 'A').toUpperCase() === String(payload.section).toUpperCase()
+        );
+        if (rollDup) {
+          saveButtons.forEach(b => {
+            b.disabled = false;
+            b.innerHTML = '<i class="fas fa-save"></i> Save Student';
+          });
+          showToast(`Duplicate entry: Roll Number '${payload.roll_no}' is already assigned in Class ${payload.class_id} (${payload.section}).`, 'error');
+          return;
+        }
+      }
+      if (payload.email) {
+        const emailDup = existingList.find(s => 
+          String(s.id) !== String(editId || '') &&
+          s.email && s.email.trim().toLowerCase() === payload.email.toLowerCase()
+        );
+        if (emailDup) {
+          saveButtons.forEach(b => {
+            b.disabled = false;
+            b.innerHTML = '<i class="fas fa-save"></i> Save Student';
+          });
+          showToast(`Duplicate entry: Email '${payload.email}' is already registered to another student.`, 'error');
+          return;
+        }
+      }
+    }
+
     try {
       if (editId) {
         await api.post(`/students/${editId}`, payload);
@@ -2712,7 +2747,17 @@ function bindAdmissionEvents() {
         showToast('Student admission enrolled successfully in database!', 'success');
       }
     } catch (err) {
-      console.warn('Admission save error, falling back to local cache:', err);
+      console.warn('Admission save error:', err);
+      const isDuplicate = err.status === 409 || (err.message && /duplicate/i.test(err.message));
+      if (isDuplicate) {
+        saveButtons.forEach(b => {
+          b.disabled = false;
+          b.innerHTML = '<i class="fas fa-save"></i> Save Student';
+        });
+        showToast(err.message || 'Duplicate entry detected! Please verify admission or roll number.', 'error');
+        return;
+      }
+
       const local = JSON.parse(localStorage.getItem('local_students') || '[]');
       if (editId) {
         const idx = local.findIndex(s => String(s.id) === String(editId));

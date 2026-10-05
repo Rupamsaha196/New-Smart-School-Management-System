@@ -269,6 +269,14 @@ function bindClassesEvents() {
             if (window.showToast) window.showToast('Please enter a class name', 'warning');
             return false;
           }
+          if (Array.isArray(classList)) {
+            const dup = classList.find(c => (c.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (dup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Class "${name}" already exists!`, 'error');
+              return false;
+            }
+          }
+
           const numeric = parseInt(document.getElementById('modal-class-numeric').value) || parseInt(name.replace(/\D/g, '')) || 0;
           const section = document.getElementById('modal-class-section').value.trim() || 'A, B';
           const teacher = document.getElementById('modal-class-teacher-select').value;
@@ -291,7 +299,11 @@ function bindClassesEvents() {
               classList = clRes.data;
             }
           } catch (e) {
-            console.warn('Class API sync fallback:', e);
+            console.warn('Class API save error:', e);
+            if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || `Duplicate entry: Class "${name}" already exists.`, 'error');
+              return false;
+            }
           }
 
           if (window.SS_STORE) {
@@ -459,6 +471,20 @@ function bindSubjectsEvents() {
             if (window.showToast) window.showToast('Please provide both Subject Name and Code', 'warning');
             return false;
           }
+
+          if (Array.isArray(subjectList)) {
+            const codeDup = subjectList.find(s => (s.code || '').trim().toLowerCase() === code.toLowerCase());
+            if (codeDup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Subject Code "${code}" is already assigned!`, 'error');
+              return false;
+            }
+            const nameDup = subjectList.find(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (nameDup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Subject Name "${name}" already exists!`, 'error');
+              return false;
+            }
+          }
+
           const type = document.getElementById('modal-sub-type').value;
           const classes = document.getElementById('modal-sub-classes').value.trim() || 'All Classes';
           const teacher = document.getElementById('modal-sub-teacher').value.trim() || 'Faculty';
@@ -472,7 +498,11 @@ function bindSubjectsEvents() {
               subjectList = subRes.data;
             }
           } catch (e) {
-            console.warn('Subject API sync fallback:', e);
+            console.warn('Subject API save error:', e);
+            if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || `Duplicate entry: Subject "${name}" already exists.`, 'error');
+              return false;
+            }
           }
 
           if (window.SS_STORE) {
@@ -622,6 +652,15 @@ function bindSessionsEvents() {
             if (window.showToast) window.showToast('Please enter an academic session title', 'warning');
             return false;
           }
+
+          if (Array.isArray(sessions)) {
+            const dup = sessions.find(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (dup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Session "${name}" already exists!`, 'error');
+              return false;
+            }
+          }
+
           const start = document.getElementById('modal-session-start').value;
           const end = document.getElementById('modal-session-end').value;
 
@@ -639,7 +678,11 @@ function bindSessionsEvents() {
               sessions = sesRes.data;
             }
           } catch (e) {
-            console.warn('Session API sync fallback:', e);
+            console.warn('Session API save error:', e);
+            if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || `Duplicate entry: Session "${name}" already exists.`, 'error');
+              return false;
+            }
             sessions.push({
               id: Date.now(),
               ...newSession
@@ -859,6 +902,30 @@ function bindTimetableEvents() {
           const teacher = document.getElementById('modal-tt-teacher').value.trim() || 'Assigned Faculty';
           const room = document.getElementById('modal-tt-room').value.trim() || 'Room 101';
 
+          if (Array.isArray(timetableDbSlots)) {
+            const slotClash = timetableDbSlots.find(s => 
+              s.day === day && 
+              String(s.start_time).startsWith(startTime.substring(0, 5)) &&
+              String(s.class_id || 1) === '1' &&
+              String(s.section || 'A').toUpperCase() === 'A'
+            );
+            if (slotClash) {
+              if (window.showToast) window.showToast(`Duplicate slot: Class 1 (Section A) already has a period on ${day} at ${startTime.substring(0, 5)}!`, 'error');
+              return false;
+            }
+            if (room) {
+              const roomClash = timetableDbSlots.find(s => 
+                s.day === day && 
+                String(s.start_time).startsWith(startTime.substring(0, 5)) &&
+                s.room && s.room.trim().toLowerCase() === room.toLowerCase()
+              );
+              if (roomClash) {
+                if (window.showToast) window.showToast(`Room clash: Room "${room}" is already booked on ${day} at ${startTime.substring(0, 5)}!`, 'error');
+                return false;
+              }
+            }
+          }
+
           try {
             await api.post('/timetable', {
               class_id: 1,
@@ -873,7 +940,11 @@ function bindTimetableEvents() {
             const ttRes = await api.get('/timetable');
             if (Array.isArray(ttRes.data)) timetableDbSlots = ttRes.data;
           } catch (e) {
-            console.warn('Timetable save API fallback:', e);
+            console.warn('Timetable save API error:', e);
+            if (e.status === 409 || (e.message && /duplicate|clash/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || 'Timetable schedule clash detected!', 'error');
+              return false;
+            }
           }
 
           const tbody = document.getElementById('timetable-grid-tbody');

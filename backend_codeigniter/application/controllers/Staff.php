@@ -19,6 +19,37 @@ class Staff extends REST_Controller {
             $this->error('Staff name is required', 422);
             return;
         }
+
+        // Duplicate Check 1: Employee ID
+        $emp_id = trim($payload['emp_id'] ?? ($payload['staff_id'] ?? ''));
+        if (!empty($emp_id)) {
+            $existing_emp = $this->db->where('emp_id', $emp_id)->get('staff')->row_array();
+            if ($existing_emp) {
+                $this->error("Duplicate entry: A staff member with Employee ID '{$emp_id}' already exists.", 409);
+                return;
+            }
+        }
+
+        // Duplicate Check 2: Email Address
+        if (!empty($payload['email'])) {
+            $email = trim($payload['email']);
+            $existing_email = $this->db->where('LOWER(email)', strtolower($email))->get('staff')->row_array();
+            if ($existing_email) {
+                $this->error("Duplicate entry: A staff member with email '{$email}' already exists.", 409);
+                return;
+            }
+        }
+
+        // Duplicate Check 3: Phone Number
+        if (!empty($payload['phone'])) {
+            $phone = trim($payload['phone']);
+            $existing_phone = $this->db->where('phone', $phone)->get('staff')->row_array();
+            if ($existing_phone) {
+                $this->error("Duplicate entry: A staff member with phone '{$phone}' already exists.", 409);
+                return;
+            }
+        }
+
         $id = $this->staff_model->create_staff($payload);
         $record = $this->staff_model->find($id);
         $this->success($record, 'Staff record created', 201);

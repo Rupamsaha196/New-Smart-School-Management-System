@@ -78,10 +78,34 @@ class Operations extends REST_Controller {
 
     public function store_book(): void {
         $payload = $this->get_payload();
-        if (empty($payload['title'])) {
+        $title = trim($payload['title'] ?? '');
+        if (empty($title)) {
             $this->error('Book title is required', 422);
             return;
         }
+
+        // Duplicate Check 1: ISBN
+        if (!empty($payload['isbn'])) {
+            $isbn = trim($payload['isbn']);
+            $existing_isbn = $this->db->where('isbn', $isbn)->get('library_books')->row_array();
+            if ($existing_isbn) {
+                $this->error("Duplicate entry: A book with ISBN '{$isbn}' already exists in catalog.", 409);
+                return;
+            }
+        }
+
+        // Duplicate Check 2: Title and Author
+        $author = trim($payload['author'] ?? '');
+        $this->db->where('LOWER(title)', strtolower($title));
+        if (!empty($author)) {
+            $this->db->where('LOWER(author)', strtolower($author));
+        }
+        $existing_book = $this->db->get('library_books')->row_array();
+        if ($existing_book) {
+            $this->error("Duplicate entry: Book '{$title}'" . (!empty($author) ? " by '{$author}'" : "") . " already exists in the catalog.", 409);
+            return;
+        }
+
         $id = $this->ops->create_book($payload);
         $this->success(['id' => $id], 'Book added to catalog', 201);
     }
@@ -98,6 +122,30 @@ class Operations extends REST_Controller {
 
     public function store_route(): void {
         $payload = $this->get_payload();
+        $routeName = trim($payload['route_name'] ?? ($payload['route_title'] ?? ($payload['title'] ?? '')));
+        $vehicleNo = trim($payload['vehicle_no'] ?? '');
+
+        if (empty($routeName)) {
+            $this->error('Route name is required', 422);
+            return;
+        }
+
+        // Duplicate Check 1: Route Name
+        $existing_route = $this->db->where('LOWER(route_name)', strtolower($routeName))->get('transport_routes')->row_array();
+        if ($existing_route) {
+            $this->error("Duplicate entry: Transport route '{$routeName}' already exists.", 409);
+            return;
+        }
+
+        // Duplicate Check 2: Vehicle Number
+        if (!empty($vehicleNo)) {
+            $existing_veh = $this->db->where('LOWER(vehicle_no)', strtolower($vehicleNo))->get('transport_routes')->row_array();
+            if ($existing_veh) {
+                $this->error("Duplicate entry: Vehicle '{$vehicleNo}' is already assigned to '{$existing_veh['route_name']}'.", 409);
+                return;
+            }
+        }
+
         $id = $this->ops->create_route($payload);
         $this->success(['id' => $id], 'Transport route added', 201);
     }
@@ -115,10 +163,18 @@ class Operations extends REST_Controller {
 
     public function store_hostel(): void {
         $payload = $this->get_payload();
-        if (empty($payload['name'])) {
+        $name = trim($payload['name'] ?? ($payload['hostel_name'] ?? ''));
+        if (empty($name)) {
             $this->error('Hostel name is required', 422);
             return;
         }
+
+        $existing = $this->db->where('LOWER(name)', strtolower($name))->get('hostels')->row_array();
+        if ($existing) {
+            $this->error("Duplicate entry: Hostel block '{$name}' already exists.", 409);
+            return;
+        }
+
         $id = $this->ops->create_hostel($payload);
         $this->success(['id' => $id], 'Hostel block registered', 201);
     }
@@ -129,6 +185,19 @@ class Operations extends REST_Controller {
             $this->error('Student ID and Hostel ID are required for allocation', 422);
             return;
         }
+
+        $student_id = (int)$payload['student_id'];
+        $existing = $this->db->where('student_id', $student_id)
+                             ->group_start()
+                                 ->where('leave_date IS NULL', null, false)
+                                 ->or_where('leave_date >=', date('Y-m-d'))
+                             ->group_end()
+                             ->get('student_hostels')->row_array();
+        if ($existing) {
+            $this->error("Duplicate allocation: Student is already actively assigned to a hostel room.", 409);
+            return;
+        }
+
         $id = $this->ops->allocate_student($payload);
         $this->success(['id' => $id], 'Student allocated to hostel block successfully', 201);
     }

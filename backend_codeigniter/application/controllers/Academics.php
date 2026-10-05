@@ -16,7 +16,18 @@ class Academics extends REST_Controller {
 
     public function store_class(): void {
         $p = $this->get_payload();
-        $name = !empty($p['name']) ? $p['name'] : $this->input->post('name');
+        $name = trim(!empty($p['name']) ? $p['name'] : ($this->input->post('name') ?: ''));
+        if (empty($name)) {
+            $this->error('Class name is required', 422);
+            return;
+        }
+
+        $existing = $this->db->where('LOWER(name)', strtolower($name))->get('school_classes')->row_array();
+        if ($existing) {
+            $this->error("Duplicate entry: A class with name '{$name}' already exists.", 409);
+            return;
+        }
+
         $teacher = !empty($p['class_teacher']) ? $p['class_teacher'] : ($this->input->post('class_teacher') ?: 'Assigned Faculty');
         $sections = !empty($p['sections']) ? $p['sections'] : (!empty($p['section']) ? $p['section'] : ($this->input->post('sections') ?: ($this->input->post('section') ?: 'A, B')));
         $this->db->insert('school_classes', [
@@ -42,9 +53,29 @@ class Academics extends REST_Controller {
 
     public function store_subject(): void {
         $p = $this->get_payload();
-        $name = !empty($p['name']) ? $p['name'] : $this->input->post('name');
-        $code = !empty($p['code']) ? $p['code'] : $this->input->post('code');
+        $name = trim(!empty($p['name']) ? $p['name'] : ($this->input->post('name') ?: ''));
+        $code = trim(!empty($p['code']) ? $p['code'] : ($this->input->post('code') ?: ''));
         $type = !empty($p['type']) ? $p['type'] : ($this->input->post('type') ?: 'Theory');
+
+        if (empty($name)) {
+            $this->error('Subject name is required', 422);
+            return;
+        }
+
+        if (!empty($code)) {
+            $existing_code = $this->db->where('LOWER(code)', strtolower($code))->get('subjects')->row_array();
+            if ($existing_code) {
+                $this->error("Duplicate entry: A subject with code '{$code}' already exists.", 409);
+                return;
+            }
+        }
+
+        $existing_name = $this->db->where('LOWER(name)', strtolower($name))->get('subjects')->row_array();
+        if ($existing_name) {
+            $this->error("Duplicate entry: A subject with name '{$name}' already exists.", 409);
+            return;
+        }
+
         $this->db->insert('subjects', [
             'name'       => $name,
             'code'       => $code,
@@ -91,6 +122,40 @@ class Academics extends REST_Controller {
             return;
         }
         $payload = $this->get_payload();
+
+        $class_id = (int)($payload['class_id'] ?? 1);
+        $section = trim($payload['section'] ?? 'A');
+        $day = trim($payload['day'] ?? 'Monday');
+        $start_time = trim($payload['start_time'] ?? '09:00:00');
+        $room = trim($payload['room'] ?? '');
+
+        // Check if class/section already has a subject scheduled in this slot
+        $existing_class = $this->db->where([
+            'class_id'   => $class_id,
+            'section'    => $section,
+            'day'        => $day,
+            'start_time' => $start_time,
+        ])->get('timetables')->row_array();
+
+        if ($existing_class) {
+            $this->error("Duplicate timetable slot: Class {$class_id} (Section {$section}) is already scheduled for a class on {$day} at {$start_time}.", 409);
+            return;
+        }
+
+        // Check if the specified room is already occupied at this day & start_time
+        if (!empty($room)) {
+            $existing_room = $this->db->where([
+                'room'       => $room,
+                'day'        => $day,
+                'start_time' => $start_time,
+            ])->get('timetables')->row_array();
+
+            if ($existing_room) {
+                $this->error("Room clash: Room '{$room}' is already booked on {$day} at {$start_time}.", 409);
+                return;
+            }
+        }
+
         $id = $this->academics_model->create_timetable($payload);
         $this->success(['id' => $id], 'Timetable slot created successfully', 201);
     }
@@ -113,7 +178,18 @@ class Academics extends REST_Controller {
 
     public function store_session(): void {
         $p = $this->get_payload();
-        $name = !empty($p['name']) ? $p['name'] : $this->input->post('name');
+        $name = trim(!empty($p['name']) ? $p['name'] : ($this->input->post('name') ?: ''));
+        if (empty($name)) {
+            $this->error('Academic session name is required', 422);
+            return;
+        }
+
+        $existing = $this->db->where('LOWER(name)', strtolower($name))->get('academic_sessions')->row_array();
+        if ($existing) {
+            $this->error("Duplicate entry: An academic session with name '{$name}' already exists.", 409);
+            return;
+        }
+
         $start_date = !empty($p['start_date']) ? $p['start_date'] : ($this->input->post('start_date') ?: date('Y-04-01'));
         $end_date = !empty($p['end_date']) ? $p['end_date'] : ($this->input->post('end_date') ?: date('Y-03-31', strtotime('+1 year')));
         $is_active = !empty($p['is_active']) ? 1 : ($this->input->post('is_active') ? 1 : 0);

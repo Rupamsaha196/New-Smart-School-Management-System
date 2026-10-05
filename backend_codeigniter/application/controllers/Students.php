@@ -22,8 +22,42 @@ class Students extends REST_Controller {
             return;
         }
 
-        if (empty($payload['admission_no'])) {
+        // Duplicate Check 1: Admission Number
+        if (!empty($payload['admission_no'])) {
+            $adm = trim($payload['admission_no']);
+            $existing = $this->student_model->find_by_admission_no($adm);
+            if ($existing) {
+                $this->error("Duplicate entry: A student with Admission Number '{$adm}' already exists.", 409);
+                return;
+            }
+        } else {
             $payload['admission_no'] = 'SS' . date('Y') . str_pad((string)rand(10, 999), 3, '0', STR_PAD_LEFT);
+        }
+
+        // Duplicate Check 2: Email Address
+        if (!empty($payload['email'])) {
+            $email = trim($payload['email']);
+            $existing = $this->db->where('email', $email)->get('students')->row_array();
+            if ($existing) {
+                $this->error("Duplicate entry: A student with email '{$email}' already exists.", 409);
+                return;
+            }
+        }
+
+        // Duplicate Check 3: Roll Number in same Class/Section
+        if (!empty($payload['roll_no']) && !empty($payload['class_id'])) {
+            $roll = trim($payload['roll_no']);
+            $this->db->where('roll_no', $roll);
+            $this->db->where('class_id', $payload['class_id']);
+            if (!empty($payload['section'])) {
+                $this->db->where('section', $payload['section']);
+            }
+            $existing = $this->db->get('students')->row_array();
+            if ($existing) {
+                $sec = $payload['section'] ?? 'A';
+                $this->error("Duplicate entry: Roll Number '{$roll}' is already assigned in Class {$payload['class_id']} (Section {$sec}).", 409);
+                return;
+            }
         }
 
         $id = $this->student_model->create_student($payload);
@@ -58,6 +92,27 @@ class Students extends REST_Controller {
 
     public function update(int $id): void {
         $payload = $this->get_payload();
+
+        // Check duplicate admission number if changing
+        if (!empty($payload['admission_no'])) {
+            $adm = trim($payload['admission_no']);
+            $existing = $this->db->where('admission_no', $adm)->where('id !=', $id)->get('students')->row_array();
+            if ($existing) {
+                $this->error("Duplicate entry: Admission Number '{$adm}' is already assigned to another student.", 409);
+                return;
+            }
+        }
+
+        // Check duplicate email if changing
+        if (!empty($payload['email'])) {
+            $email = trim($payload['email']);
+            $existing = $this->db->where('email', $email)->where('id !=', $id)->get('students')->row_array();
+            if ($existing) {
+                $this->error("Duplicate entry: Student email '{$email}' is already registered to another student.", 409);
+                return;
+            }
+        }
+
         $this->student_model->update_student($id, $payload);
         $student = $this->student_model->find($id);
         $this->success($student, 'Student record updated successfully');

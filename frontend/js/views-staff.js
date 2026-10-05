@@ -131,6 +131,22 @@ function bindStaffEvents() {
             if (window.showToast) window.showToast('Please provide Staff Full Name and Role', 'warning');
             return false;
           }
+
+          if (Array.isArray(staffMembers)) {
+            const nameDup = staffMembers.find(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (nameDup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Staff member "${name}" already exists!`, 'error');
+              return false;
+            }
+            if (phone && phone !== '+91 98765 00000') {
+              const phoneDup = staffMembers.find(s => (s.phone || '').trim() === phone);
+              if (phoneDup) {
+                if (window.showToast) window.showToast(`Duplicate entry: Phone number "${phone}" is already registered to another staff member!`, 'error');
+                return false;
+              }
+            }
+          }
+
           const dept = document.getElementById('modal-staff-dept').value;
           const salary = parseFloat(document.getElementById('modal-staff-salary').value) || 50000;
           const genEmpId = `EMP${Math.floor(1000 + Math.random() * 9000)}`;
@@ -153,7 +169,11 @@ function bindStaffEvents() {
           try {
             await api.post('/staff', newStaff);
           } catch (err) {
-            console.warn('Staff backend sync fallback:', err);
+            console.warn('Staff backend sync error:', err);
+            if (err.status === 409 || (err.message && /duplicate/i.test(err.message))) {
+              if (window.showToast) window.showToast(err.message || `Duplicate entry: Staff member "${name}" already exists.`, 'error');
+              return false;
+            }
           }
 
           if (window.SS_STORE) {

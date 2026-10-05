@@ -464,6 +464,24 @@ function bindLibraryEvents() {
           const qty = parseInt(document.getElementById('modal-book-qty').value) || 10;
           const rack = document.getElementById('modal-book-rack').value.trim() || 'Rack A-01';
 
+          if (Array.isArray(books)) {
+            if (isbn) {
+              const isbnDup = books.find(b => (b.isbn || '').trim().toLowerCase() === isbn.toLowerCase());
+              if (isbnDup) {
+                if (window.showToast) window.showToast(`Duplicate entry: A book with ISBN "${isbn}" already exists!`, 'error');
+                return false;
+              }
+            }
+            const titleDup = books.find(b => 
+              (b.title || '').trim().toLowerCase() === title.toLowerCase() &&
+              (b.author || '').trim().toLowerCase() === author.toLowerCase()
+            );
+            if (titleDup) {
+              if (window.showToast) window.showToast(`Duplicate entry: "${title}" by ${author} already exists in library catalogue!`, 'error');
+              return false;
+            }
+          }
+
           const newBook = {
             title,
             author,
@@ -481,7 +499,11 @@ function bindLibraryEvents() {
               books = bRes.data;
             }
           } catch (e) {
-            console.warn('Book API sync fallback:', e);
+            console.warn('Book API save error:', e);
+            if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || `Duplicate entry: Book "${title}" already exists.`, 'error');
+              return false;
+            }
           }
 
           const tbody = document.getElementById('books-tbody');
@@ -1010,6 +1032,22 @@ function bindTransportEvents() {
             if (window.showToast) window.showToast('Please provide Route Title, Vehicle Number, and Driver Name', 'warning');
             return false;
           }
+
+          if (Array.isArray(routes)) {
+            const titleDup = routes.find(r => (r.route_name || r.route_title || '').trim().toLowerCase() === title.toLowerCase());
+            if (titleDup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Bus route "${title}" already exists!`, 'error');
+              return false;
+            }
+            if (vehicle) {
+              const vehDup = routes.find(r => (r.vehicle_no || '').trim().toLowerCase() === vehicle.toLowerCase());
+              if (vehDup) {
+                if (window.showToast) window.showToast(`Duplicate entry: Vehicle number "${vehicle}" is already assigned!`, 'error');
+                return false;
+              }
+            }
+          }
+
           const type = document.getElementById('modal-newroute-type').value;
           const stops = document.getElementById('modal-newroute-stops').value.trim() || 'Campus Main Gate';
           const fare = parseFloat(document.getElementById('modal-newroute-fare').value) || 2500;
@@ -1033,7 +1071,11 @@ function bindTransportEvents() {
               routes = rRes.data;
             }
           } catch (e) {
-            console.warn('Route API sync fallback:', e);
+            console.warn('Route API save error:', e);
+            if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || `Duplicate entry: Route "${title}" already exists.`, 'error');
+              return false;
+            }
           }
 
           if (window.SS_STORE) {
@@ -1472,6 +1514,15 @@ function bindHostelEvents() {
             if (window.showToast) window.showToast('Please provide Hostel Name and Warden Name', 'warning');
             return false;
           }
+
+          if (Array.isArray(hostels)) {
+            const dup = hostels.find(h => (h.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (dup) {
+              if (window.showToast) window.showToast(`Duplicate entry: Hostel block "${name}" already exists!`, 'error');
+              return false;
+            }
+          }
+
           const type = document.getElementById('modal-hostel-type').value;
           const rooms = parseInt(document.getElementById('modal-hostel-rooms').value) || 20;
           const cap = parseInt(document.getElementById('modal-hostel-cap').value) || 60;
@@ -1492,7 +1543,11 @@ function bindHostelEvents() {
               hostels = hRes.data;
             }
           } catch (e) {
-            console.warn('Hostel API sync fallback:', e);
+            console.warn('Hostel API save error:', e);
+            if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || `Duplicate entry: Hostel block "${name}" already exists.`, 'error');
+              return false;
+            }
           }
 
           if (window.SS_STORE) {
@@ -1644,7 +1699,11 @@ function bindHostelEvents() {
               savedToApi = true;
             }
           } catch (e) {
-            console.warn('Hostel allocation API fallback:', e);
+            console.warn('Hostel allocation API error:', e);
+            if (e.status === 409 || (e.message && /duplicate|already/i.test(e.message))) {
+              if (window.showToast) window.showToast(e.message || 'Duplicate allocation: Student is already assigned to a hostel.', 'error');
+              return false;
+            }
           }
 
           if (!savedToApi) {
