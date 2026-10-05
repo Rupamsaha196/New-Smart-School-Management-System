@@ -75,6 +75,24 @@ class Students extends REST_Controller {
     }
 
     public function show(int $id): void {
+        $user = $this->get_auth_user();
+        if ($user) {
+            $role = strtolower($user['role'] ?? '');
+            if ($role === 'student') {
+                $myStudentId = (int)($user['student_id'] ?? ($user['id'] ?? 8));
+                if ($myStudentId !== $id) {
+                    $this->error("Access denied: You are not authorized to view another student's record.", 403);
+                    return;
+                }
+            } elseif ($role === 'parent') {
+                $myChildId = (int)($user['student_id'] ?? ($user['id'] ?? 8));
+                if ($myChildId !== $id) {
+                    $this->error("Access denied: Parents are only authorized to view their own child's record.", 403);
+                    return;
+                }
+            }
+        }
+
         $profile = $this->student_model->get_360_profile($id);
         if (!$profile) {
             $this->error('Student not found', 404);
@@ -91,6 +109,15 @@ class Students extends REST_Controller {
     }
 
     public function update(int $id): void {
+        $user = $this->get_auth_user();
+        if ($user) {
+            $role = strtolower($user['role'] ?? '');
+            if ($role === 'student' || $role === 'parent') {
+                $this->error('Access denied: Students and parents cannot modify student records.', 403);
+                return;
+            }
+        }
+
         $payload = $this->get_payload();
 
         // Check duplicate admission number if changing
@@ -119,6 +146,14 @@ class Students extends REST_Controller {
     }
 
     public function destroy(int $id): void {
+        $user = $this->get_auth_user();
+        if ($user) {
+            $role = strtolower($user['role'] ?? '');
+            if ($role !== 'super_admin' && $role !== 'admin') {
+                $this->error('Access denied: Only administrators can delete student records.', 403);
+                return;
+            }
+        }
         $this->student_model->delete_student($id);
         $this->success(null, 'Student record deleted');
     }

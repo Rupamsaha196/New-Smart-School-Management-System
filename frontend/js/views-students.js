@@ -7,7 +7,24 @@
    Student Profile View
    ========================================================================== */
 async function renderStudentProfile(params) {
-  const studentId = params?.id || '1';
+  let studentId = params?.id || '1';
+
+  // Authorization Guard: Prevent students or parents from viewing or editing another student's record
+  const currentUser = typeof auth !== 'undefined' ? auth.getUser() : null;
+  if (currentUser) {
+    const role = (currentUser.role || '').toLowerCase();
+    if (role === 'student' || role === 'parent') {
+      const allowedStudentId = String(currentUser.student_id || (role === 'student' ? (currentUser.id || '8') : '8'));
+      if (String(studentId) !== allowedStudentId) {
+        if (window.showToast) {
+          window.showToast("Access Denied: You cannot view or edit another user's student data.", 'danger');
+        }
+        window.location.hash = `#/students/${allowedStudentId}`;
+        studentId = allowedStudentId;
+      }
+    }
+  }
+
   let student = null;
 
   try {

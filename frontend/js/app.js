@@ -258,8 +258,55 @@ const auth = {
     twoFactorChallenge = null;
   },
 
+  checkAccountLockout(email) {
+    const key = 'smart_school_lockout_' + (email || 'default').toLowerCase().trim();
+    try {
+      const data = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!data) return null;
+      const now = Date.now();
+      if (data.lockedUntil && now < data.lockedUntil) {
+        const remainingMin = Math.max(1, Math.ceil((data.lockedUntil - now) / 60000));
+        return `Account locked: Too many failed login attempts (${data.attempts}). Please try again in ${remainingMin} minute(s) or contact administrator.`;
+      }
+      if (data.lockedUntil && now >= data.lockedUntil) {
+        localStorage.removeItem(key);
+      }
+    } catch {}
+    return null;
+  },
+
+  recordFailedLogin(email) {
+    const key = 'smart_school_lockout_' + (email || 'default').toLowerCase().trim();
+    try {
+      const data = JSON.parse(localStorage.getItem(key) || '{"attempts":0}');
+      data.attempts = (data.attempts || 0) + 1;
+      data.lastAttempt = Date.now();
+      if (data.attempts >= 5) {
+        data.lockedUntil = Date.now() + 15 * 60 * 1000;
+      }
+      localStorage.setItem(key, JSON.stringify(data));
+      return data;
+    } catch {
+      return { attempts: 1 };
+    }
+  },
+
+  resetFailedLogin(email) {
+    const key = 'smart_school_lockout_' + (email || 'default').toLowerCase().trim();
+    try {
+      localStorage.removeItem(key);
+    } catch {}
+  },
+
   async login(email, password) {
     const normEmail = (email || '').trim().toLowerCase();
+
+    // Check account lockout status
+    const lockErr = this.checkAccountLockout(normEmail);
+    if (lockErr) {
+      throw new Error(lockErr);
+    }
+
     let payload = null;
     try {
       const res = await api.post('/login', { email: normEmail, password: password || 'password' });
@@ -283,10 +330,10 @@ const auth = {
         'receptionist': { id: 5, name: 'Meena Patel', email: 'receptionist@smartschool.com', role: 'receptionist' },
         'librarian@smartschool.com': { id: 6, name: 'Amit Kumar', email: 'librarian@smartschool.com', role: 'librarian' },
         'librarian': { id: 6, name: 'Amit Kumar', email: 'librarian@smartschool.com', role: 'librarian' },
-        'parent@smartschool.com': { id: 7, name: 'Rajesh Sharma (Parent)', email: 'parent@smartschool.com', role: 'parent' },
-        'parent': { id: 7, name: 'Rajesh Sharma (Parent)', email: 'parent@smartschool.com', role: 'parent' },
-        'student@smartschool.com': { id: 8, name: 'Aarav Sharma', email: 'student@smartschool.com', role: 'student' },
-        'student': { id: 8, name: 'Aarav Sharma', email: 'student@smartschool.com', role: 'student' },
+        'parent@smartschool.com': { id: 7, name: 'Rajesh Sharma (Parent)', email: 'parent@smartschool.com', role: 'parent', student_id: 8 },
+        'parent': { id: 7, name: 'Rajesh Sharma (Parent)', email: 'parent@smartschool.com', role: 'parent', student_id: 8 },
+        'student@smartschool.com': { id: 8, name: 'Aarav Sharma', email: 'student@smartschool.com', role: 'student', student_id: 8 },
+        'student': { id: 8, name: 'Aarav Sharma', email: 'student@smartschool.com', role: 'student', student_id: 8 },
       };
 
       let matchedUser = demoAccounts[normEmail];
@@ -301,18 +348,34 @@ const auth = {
       }
 
       if (matchedUser) {
+        // Enforce password check in demo / fallback mode
+        const validDemoPasswords = ['password', 'Admin@123', 'admin123', 'password123', 'demo', '123456'];
+        if (!validDemoPasswords.includes(password)) {
+          const lockInfo = this.recordFailedLogin(normEmail);
+          const rem = Math.max(0, 5 - (lockInfo.attempts || 1));
+          if (lockInfo.attempts >= 5) {
+            throw new Error('Account locked: 5 consecutive failed login attempts reached. Locked for 15 minutes.');
+          }
+          throw new Error(`Invalid password provided. ${rem} attempt(s) remaining before account lockout.`);
+        }
+
         payload = {
           token: 'ci_jwt_demo_' + Date.now(),
           user: matchedUser,
         };
       } else {
-        throw err;
+        const lockInfo = this.recordFailedLogin(normEmail);
+        throw new Error('Invalid credentials provided. Account not found.');
       }
     }
 
     if (!payload || !payload.user) {
+      this.recordFailedLogin(normEmail);
       throw new Error('Invalid credentials provided or unable to read user profile');
     }
+
+    // Login succeeded: reset failed attempts
+    this.resetFailedLogin(normEmail);
 
     if (payload.two_factor_required) {
       twoFactorChallenge = payload;
@@ -3522,6 +3585,40 @@ async function handleRouting() {
     app.innerHTML = renderLogin();
     bindLoginEvents();
     return;
+  }
+
+  // Centralized Role-Based Access Control (RBAC) Route Guard
+  const ROUTE_PERMISSIONS = {
+    '#/settings': ['super_admin', 'admin'],
+    '#/settings/custom-fields': ['super_admin', 'admin'],
+    '#/settings/2fa': ['super_admin', 'admin'],
+    '#/staff': ['super_admin', 'admin', 'hr', 'accountant'],
+    '#/staff/attendance': ['super_admin', 'admin', 'hr', 'accountant'],
+    '#/finance': ['super_admin', 'admin', 'accountant'],
+    '#/finance/income-expense': ['super_admin', 'admin', 'accountant'],
+    '#/fees/structure': ['super_admin', 'admin', 'accountant'],
+    '#/fees/razorpay': ['super_admin', 'admin'],
+    '#/fees/collection': ['super_admin', 'admin', 'accountant', 'receptionist'],
+    '#/attendance/mark': ['super_admin', 'admin', 'teacher'],
+    '#/exams/marks': ['super_admin', 'admin', 'teacher'],
+    '#/students/admission': ['super_admin', 'admin', 'receptionist'],
+    '#/admissions/online': ['super_admin', 'admin', 'receptionist'],
+    '#/online-admission': ['super_admin', 'admin', 'receptionist'],
+    '#/academics/promotion': ['super_admin', 'admin'],
+  };
+
+  const currentUser = auth.getUser();
+  const currentRole = (currentUser?.role || '').toLowerCase();
+  for (const [restrictedPrefix, allowedRoles] of Object.entries(ROUTE_PERMISSIONS)) {
+    if (routePath === restrictedPrefix || routePath.startsWith(restrictedPrefix + '/')) {
+      if (!allowedRoles.includes(currentRole)) {
+        if (window.showToast) {
+          window.showToast(`Access Denied: Your role (${currentRole}) is restricted from accessing ${routePath}.`, 'danger');
+        }
+        window.location.hash = '#/dashboard';
+        return;
+      }
+    }
   }
 
   let contentHtml = '';
