@@ -696,6 +696,8 @@ async function renderTimetable() {
     `;
   }
 
+  const canManageTimetable = window.canManage ? window.canManage() : false;
+
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
@@ -710,9 +712,11 @@ async function renderTimetable() {
           <button class="btn btn-secondary" onclick="window.print()">
             ${icon('print', 18)} Print Schedule
           </button>
+          ${canManageTimetable ? `
           <button class="btn btn-primary" id="add-timetable-slot-btn">
             ${icon('plus', 18)} Add Period Slot
           </button>
+          ` : ''}
         </div>
       </div>
 
@@ -791,8 +795,9 @@ function bindTimetableEvents() {
     };
   }
 
+  const canManageTimetable = window.canManage ? window.canManage() : false;
   const addSlotBtn = document.getElementById('add-timetable-slot-btn');
-  if (addSlotBtn) {
+  if (addSlotBtn && canManageTimetable) {
     addSlotBtn.onclick = async () => {
       let subjectsForModal = subjectList || [];
       if (subjectsForModal.length === 0) {

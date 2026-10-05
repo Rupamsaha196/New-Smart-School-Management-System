@@ -84,12 +84,24 @@ class Academics extends REST_Controller {
     }
 
     public function store_timetable(): void {
+        $user = $this->get_auth_user();
+        $role = strtolower($user['role'] ?? '');
+        if ($role === 'teacher' || $role === 'student' || $role === 'parent') {
+            $this->error('Access denied: Teachers and students do not have permission to modify timetables.', 403);
+            return;
+        }
         $payload = $this->get_payload();
         $id = $this->academics_model->create_timetable($payload);
         $this->success(['id' => $id], 'Timetable slot created successfully', 201);
     }
 
     public function destroy_timetable(int $id): void {
+        $user = $this->get_auth_user();
+        $role = strtolower($user['role'] ?? '');
+        if ($role === 'teacher' || $role === 'student' || $role === 'parent') {
+            $this->error('Access denied: Teachers and students do not have permission to delete timetable slots.', 403);
+            return;
+        }
         $this->academics_model->delete_timetable($id);
         $this->success(null, 'Timetable slot removed');
     }

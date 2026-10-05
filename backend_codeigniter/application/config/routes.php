@@ -12,13 +12,16 @@ $route['404_override'] = '';
 $route['translate_uri_dashes'] = FALSE;
 
 // ── Auth & Two-Factor ────────────────────────────────────────────────
-$route['api/login']              = 'auth/login';
-$route['api/logout']             = 'auth/logout';
-$route['api/me']                 = 'auth/me';
-$route['api/two-factor/verify']  = 'auth/verify_2fa';
-$route['api/two-factor/status']  = 'settings/two_factor_status';
-$route['api/two-factor/enable']  = 'settings/two_factor_enable';
-$route['api/two-factor/disable'] = 'settings/two_factor_disable';
+$route['api/login']                     = 'auth/login';
+$route['api/auth/google']               = 'auth/google_login';
+$route['api/logout']                    = 'auth/logout';
+$route['api/me']                        = 'auth/me';
+$route['api/two-factor/verify']         = 'auth/verify_2fa';
+$route['api/two-factor/google-oauth']   = 'auth/verify_google_2fa';
+$route['api/two-factor/status']         = 'settings/two_factor_status';
+$route['api/two-factor/enable']         = 'settings/two_factor_enable';
+$route['api/two-factor/disable']        = 'settings/two_factor_disable';
+$route['api/two-factor/link-google']    = 'settings/two_factor_link_google';
 
 // ── Dashboard ────────────────────────────────────────────────────────
 $route['api/dashboard'] = 'dashboard/index';
