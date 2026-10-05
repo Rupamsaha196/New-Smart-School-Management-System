@@ -61,6 +61,7 @@ $route['api/razorpay/config']               = 'razorpay/config_key';
 $route['api/razorpay/status']               = 'razorpay/config_key';
 $route['api/razorpay/save-keys']            = 'razorpay/save_config';
 $route['api/razorpay/test-connection']      = 'razorpay/test_connection';
+$route['api/razorpay/webhook']              = 'razorpay/webhook';
 
 // ── Attendance & QR Attendance ───────────────────────────────────────
 $route['api/attendance']                    = 'attendance/index';
@@ -144,3 +145,7 @@ $route['api/custom-fields']                 = 'settings/custom_fields';
 // ── Front Website ────────────────────────────────────────────────────
 $route['api/website/inquiry']               = 'website/inquiry';
 $route['api/website/info']                  = 'website/info';
+
+// ── Scheduled Jobs & Background Cron ─────────────────────────────────
+$route['api/cron/run']                      = 'cron/run';
+$route['api/cron/status']                   = 'cron/status';
