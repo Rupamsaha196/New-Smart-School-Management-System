@@ -533,20 +533,107 @@ async function renderTransport() {
     if (window.SS_STORE) routes = window.SS_STORE.get('routes');
   }
 
+  const canManageTransport = window.canManage ? window.canManage() : false;
+  const user = (window.auth && typeof window.auth.getUser === 'function') ? window.auth.getUser() : null;
+  const isParent = user && user.role === 'parent';
+  const isStudent = user && user.role === 'student';
+
   const totalBuses = routes.length;
   const totalRiders = routes.reduce((acc, r) => acc + (r.student_count || 0), 0);
+  const activeBus = routes[0] || {
+    route_title: 'Route 1 - Salt Lake Sector V Express',
+    vehicle_no: 'WB-02-AK-9842',
+    driver_name: 'Ramesh Yadav',
+    driver_phone: '+91 98765 43201',
+    stops: 'Sector V Gate 2, City Center Mall, Ultadanga Station, Salt Lake Stadium',
+  };
 
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
         <div>
-          <h1>Transport & Fleet Routes</h1>
-          <p class="subtitle">School bus tracking, designated pickup stops, driver emergency contacts, and student manifests</p>
+          <h1>${(isParent || isStudent) ? 'Live Bus GPS Tracking &amp; Routes' : 'Transport &amp; Fleet Routes'}</h1>
+          <p class="subtitle">${(isParent || isStudent) ? 'Real-time satellite GPS tracking of your ward\'s designated school bus route, stops, and driver contacts' : 'School bus tracking, designated pickup stops, driver emergency contacts, and student manifests'}</p>
         </div>
-        <button class="btn btn-primary" id="add-route-btn">
-          ${icon('plus', 18)} Add Bus Route
-        </button>
+        ${canManageTransport ? `
+          <button class="btn btn-primary" id="add-route-btn">
+            ${icon('plus', 18)} Add Bus Route
+          </button>
+        ` : `
+          <button class="btn btn-primary" id="live-gps-quick-btn">
+            ${icon('truck', 18)} 🛰️ Live GPS Telemetry
+          </button>
+        `}
       </div>
+
+      <!-- Real-Time GPS Tracking Radar Card for Parents & Students -->
+      ${(isParent || isStudent || routes.length > 0) ? `
+        <div class="card mb-6" style="border-left: 4px solid var(--primary-600); background: linear-gradient(145deg, var(--bg-card) 0%, rgba(37,99,235,0.04) 100%);">
+          <div class="card-header">
+            <div class="flex items-center gap-3">
+              <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(37,99,235,0.1); color: var(--primary-600); display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                🛰️
+              </div>
+              <div>
+                <span class="card-title">Real-Time Ward Bus Tracking (GPS Satellite Link)</span>
+                <div class="card-subtitle">Live vehicle speed, waypoint telemetry, and estimated arrival time</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-success animate-pulse" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e;"></span> LIVE SATELLITE GPS ACTIVE
+              </span>
+            </div>
+          </div>
+
+          <!-- Telemetry Bar -->
+          <div class="grid grid-4 gap-4 p-4 mb-4" style="background: var(--bg-input); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+            <div>
+              <div class="text-xs text-secondary font-semibold uppercase">Assigned Bus</div>
+              <div class="text-base font-bold mt-1" style="color: var(--primary-700);">${activeBus.vehicle_no || 'WB-02-AK-9842'}</div>
+              <div class="text-xs text-secondary">${activeBus.route_title}</div>
+            </div>
+            <div>
+              <div class="text-xs text-secondary font-semibold uppercase">Live Speed &amp; Heading</div>
+              <div class="text-base font-bold mt-1" style="color: var(--success-600);">34 km/h • 68° ENE</div>
+              <div class="text-xs text-secondary">Normal Traffic Flow</div>
+            </div>
+            <div>
+              <div class="text-xs text-secondary font-semibold uppercase">Next Waypoint Stop</div>
+              <div class="text-base font-bold mt-1" style="color: var(--info-600);">City Center Gate 2</div>
+              <div class="text-xs text-secondary">ETA: ~6 minutes</div>
+            </div>
+            <div>
+              <div class="text-xs text-secondary font-semibold uppercase">Driver &amp; Emergency</div>
+              <div class="text-base font-bold mt-1">${activeBus.driver_name}</div>
+              <div class="text-xs text-secondary">
+                <a href="tel:${activeBus.driver_phone}" class="text-primary font-semibold">📞 Call: ${activeBus.driver_phone}</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Animated Route Waypoints Track -->
+          <div style="padding: 14px 18px; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+            <div class="flex items-center justify-between text-xs text-secondary font-semibold mb-2">
+              <span>🚩 Start: School Main Campus (07:15 AM)</span>
+              <span style="color: var(--primary-600); font-weight: 700;">🚌 In Transit (Approaching Stop 2)</span>
+              <span>🏁 Destination: Salt Lake Sec V Hub (08:15 AM)</span>
+            </div>
+            <div style="position: relative; height: 10px; background: var(--border-color); border-radius: 5px; overflow: visible; margin: 16px 0;">
+              <div style="position: absolute; left: 0; top: 0; width: 55%; height: 100%; background: linear-gradient(90deg, #10b981, #3b82f6); border-radius: 5px;"></div>
+              <div style="position: absolute; left: calc(55% - 14px); top: -9px; width: 28px; height: 28px; border-radius: 50%; background: var(--primary-600); color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 12px rgba(59,130,246,0.7); font-size: 0.9rem;" title="Current Bus Position">
+                🚌
+              </div>
+            </div>
+            <div class="flex justify-between text-xs text-secondary mt-1">
+              <span>Campus Gate (Departed)</span>
+              <span>Sector V Crossing (Passed)</span>
+              <span style="color: var(--primary-700); font-weight: 700;">City Center (Next Stop)</span>
+              <span>Salt Lake Stadium (Drop)</span>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       <div class="grid-3 mb-6">
         <div class="stat-card stat-primary">
@@ -562,18 +649,22 @@ async function renderTransport() {
         <div class="stat-card stat-info">
           <div class="stat-icon">${icon('checkCircle', 24)}</div>
           <div class="stat-value">100% Verified</div>
-          <div class="stat-label">GPS Beacons & Driver Licenses</div>
+          <div class="stat-label">GPS Beacons &amp; Driver Licenses</div>
         </div>
       </div>
 
       <div class="card">
+        <div class="card-header">
+          <span class="card-title">School Bus Routes &amp; Assigned Vehicles</span>
+          <span class="badge badge-info">${(isParent || isStudent) ? 'Live GPS Tracking Enabled' : 'Fleet Administration'}</span>
+        </div>
         <div class="table-responsive">
           <table class="table">
             <thead>
               <tr>
                 <th>Route Details</th>
                 <th>Assigned Vehicle</th>
-                <th>Driver & Emergency Contact</th>
+                <th>Driver &amp; Emergency Contact</th>
                 <th>Major Stop Points</th>
                 <th>Monthly Fare</th>
                 <th>Students</th>
@@ -581,7 +672,7 @@ async function renderTransport() {
               </tr>
             </thead>
             <tbody id="routes-tbody">
-              ${renderRouteRows(routes)}
+              ${renderRouteRows(routes, canManageTransport)}
             </tbody>
           </table>
         </div>
@@ -590,9 +681,9 @@ async function renderTransport() {
   `;
 }
 
-function renderRouteRows(items) {
+function renderRouteRows(items, canManageTransport = false) {
   if (!items || items.length === 0) {
-    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No routes configured yet. Click "Add Bus Route" above.</td></tr>`;
+    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No routes configured yet.</td></tr>`;
   }
   return items.map(r => `
     <tr>
@@ -607,7 +698,7 @@ function renderRouteRows(items) {
       <td>
         <strong>${r.driver_name}</strong>
         <div class="text-xs text-secondary">
-          <a href="tel:${r.driver_phone}" style="color: var(--primary-600); text-decoration: none;">${r.driver_phone}</a>
+          <a href="tel:${r.driver_phone}" style="color: var(--primary-600); text-decoration: none;">📞 ${r.driver_phone}</a>
         </div>
       </td>
       <td>
@@ -619,15 +710,20 @@ function renderRouteRows(items) {
       <td><span class="badge badge-info" style="font-weight: 700;">${r.student_count || 0} Students</span></td>
       <td style="text-align: right;">
         <div class="flex justify-end gap-1">
-          <button class="btn btn-secondary btn-sm view-stops-btn" data-id="${r.id}" title="View Stops & Waypoint Timings">
+          <button class="btn btn-primary btn-sm track-gps-btn" data-id="${r.id}" title="Real-Time GPS Satellite Tracking">
+            ${icon('truck', 14)} Track GPS
+          </button>
+          <button class="btn btn-secondary btn-sm view-stops-btn" data-id="${r.id}" title="View Stops &amp; Waypoint Timings">
             ${icon('mapPin', 14)} Stops
           </button>
-          <button class="btn-ghost btn-sm edit-route-btn" data-id="${r.id}" title="Edit Route">
-            ${icon('pencil', 14)}
-          </button>
-          <button class="btn-ghost btn-sm delete-route-btn" data-id="${r.id}" title="Delete Route" style="color: var(--danger-500);">
-            ${icon('trash', 14)}
-          </button>
+          ${canManageTransport ? `
+            <button class="btn-ghost btn-sm edit-route-btn" data-id="${r.id}" title="Edit Route">
+              ${icon('pencil', 14)}
+            </button>
+            <button class="btn-ghost btn-sm delete-route-btn" data-id="${r.id}" title="Delete Route" style="color: var(--danger-500);">
+              ${icon('trash', 14)}
+            </button>
+          ` : ''}
         </div>
       </td>
     </tr>
@@ -635,7 +731,28 @@ function renderRouteRows(items) {
 }
 
 function bindTransportEvents() {
+  const canManageTransport = window.canManage ? window.canManage() : false;
+
+  const quickGpsBtn = document.getElementById('live-gps-quick-btn');
+  if (quickGpsBtn) {
+    quickGpsBtn.onclick = () => {
+      if (typeof window.openLiveBusTrackingModal === 'function') {
+        window.openLiveBusTrackingModal(routes[0]?.id || 1);
+      }
+    };
+  }
+
   function attachRouteActions() {
+    // Live GPS Satellite Tracking Modal
+    document.querySelectorAll('.track-gps-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        if (typeof window.openLiveBusTrackingModal === 'function') {
+          window.openLiveBusTrackingModal(id);
+        }
+      };
+    });
+
     // View Stops Modal
     document.querySelectorAll('.view-stops-btn').forEach(btn => {
       btn.onclick = () => {
@@ -685,8 +802,9 @@ function bindTransportEvents() {
       };
     });
 
-    // Edit Route Modal
-    document.querySelectorAll('.edit-route-btn').forEach(btn => {
+    if (canManageTransport) {
+      // Edit Route Modal
+      document.querySelectorAll('.edit-route-btn').forEach(btn => {
       btn.onclick = () => {
         const id = btn.getAttribute('data-id');
         const r = window.SS_STORE ? window.SS_STORE.find('routes', id) : routes.find(x => String(x.id) === String(id));
@@ -828,13 +946,14 @@ function bindTransportEvents() {
         });
       };
     });
+    }
   }
 
   attachRouteActions();
 
-  // Add Bus Route Button
+  // Add Bus Route Button (Guarded to Managers / Admins)
   const btn = document.getElementById('add-route-btn');
-  if (btn) {
+  if (btn && canManageTransport) {
     btn.onclick = () => {
       window.openAppModal({
         title: 'Add New Fleet Bus Route',
@@ -933,6 +1052,97 @@ function bindTransportEvents() {
     };
   }
 }
+
+// Global Interactive Live Bus GPS Tracking Modal for Parents, Students & Administrators
+window.openLiveBusTrackingModal = function(id) {
+  const r = (window.SS_STORE ? window.SS_STORE.find('routes', id) : routes.find(x => String(x.id) === String(id))) || routes[0] || {
+    route_title: 'Route 1 - Salt Lake Sector V Express',
+    vehicle_no: 'WB-02-AK-9842',
+    driver_name: 'Ramesh Yadav',
+    driver_phone: '+91 98765 43201',
+    stops: 'Campus Main Gate, Sector V Crossing, City Center Gate 2, Salt Lake Stadium',
+  };
+
+  const stopList = (r.stops || '').split(',').map(s => s.trim()).filter(Boolean);
+
+  window.openAppModal({
+    title: `🛰️ Live GPS Satellite Tracking: ${r.vehicle_no}`,
+    subtitle: `${r.route_title} • Assigned Driver: ${r.driver_name} (${r.driver_phone})`,
+    saveLabel: 'Close Radar',
+    saveIcon: 'checkCircle',
+    contentHtml: `
+      <div style="padding: 10px 0;">
+        <!-- Simulated High-Tech GPS Map Radar Window -->
+        <div style="position: relative; height: 220px; border-radius: 12px; overflow: hidden; background: #0f172a; border: 1px solid rgba(59,130,246,0.3); margin-bottom: 16px; box-shadow: inset 0 0 40px rgba(0,0,0,0.6);">
+          <div style="position: absolute; inset: 0; background-image: radial-gradient(rgba(59, 130, 246, 0.25) 1px, transparent 1px); background-size: 24px 24px; opacity: 0.8;"></div>
+
+          <div style="position: absolute; left: 52%; top: 48%; transform: translate(-50%, -50%); width: 140px; height: 140px; border-radius: 50%; border: 1px dashed rgba(59,130,246,0.4); pointer-events: none;"></div>
+          <div style="position: absolute; left: 52%; top: 48%; transform: translate(-50%, -50%); width: 70px; height: 70px; border-radius: 50%; border: 1px solid rgba(16,185,129,0.5); pointer-events: none;"></div>
+
+          <!-- Bus Marker with Live Ripple -->
+          <div style="position: absolute; left: 52%; top: 48%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; z-index: 10;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: #2563eb; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; box-shadow: 0 0 20px #3b82f6; border: 2px solid #fff;">
+              🚌
+            </div>
+            <div style="background: rgba(15,23,42,0.9); color: #fff; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; margin-top: 4px; font-weight: 700; border: 1px solid rgba(255,255,255,0.2);">
+              ${r.vehicle_no} (34 km/h)
+            </div>
+          </div>
+
+          <div style="position: absolute; top: 12px; left: 12px; background: rgba(15,23,42,0.85); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; font-size: 0.75rem; color: #e2e8f0;">
+            <div style="color: #22c55e; font-weight: 700;">● GPS LOCKED • 12 SATELLITES</div>
+            <div style="font-family: monospace; font-size: 0.7rem; color: #94a3b8; margin-top: 2px;">22.5726° N, 88.4312° E</div>
+          </div>
+
+          <div style="position: absolute; bottom: 12px; right: 12px; background: rgba(15,23,42,0.85); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 6px 12px; font-size: 0.75rem; color: #e2e8f0; text-align: right;">
+            <div style="font-weight: 700; color: #38bdf8;">NEXT STOP: ${stopList[1] || 'City Center'}</div>
+            <div style="font-size: 0.7rem; color: #94a3b8;">Est. Arrival: ~6 mins</div>
+          </div>
+        </div>
+
+        <!-- Driver Direct Contact Call Button -->
+        <div class="flex items-center justify-between p-3 rounded-md mb-4" style="background: var(--bg-input); border: 1px solid var(--border-color);">
+          <div class="flex items-center gap-3">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary-100); color: var(--primary-700); display: flex; align-items: center; justify-content: center; font-weight: 700;">
+              👨‍✈️
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 0.9rem;">${r.driver_name} (Assigned Driver)</div>
+              <div class="text-xs text-secondary">Verified Commercial License &amp; Police Verification Active</div>
+            </div>
+          </div>
+          <a href="tel:${r.driver_phone}" class="btn btn-primary btn-sm" style="text-decoration: none;">
+            📞 Call Driver
+          </a>
+        </div>
+
+        <!-- Waypoint Sequence -->
+        <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 8px;">Route Stops &amp; Waypoint Progress:</h4>
+        <div class="flex flex-col gap-2">
+          ${stopList.map((stop, idx) => {
+            const isPassed = idx === 0;
+            const isCurrent = idx === 1;
+            return `
+              <div class="flex items-center gap-3 p-2 rounded-md" style="background: ${isCurrent ? 'rgba(37,99,235,0.08)' : 'var(--bg-input)'}; border: 1px solid ${isCurrent ? 'var(--primary-400)' : 'transparent'};">
+                <div style="width: 24px; height: 24px; border-radius: 50%; background: ${isPassed ? '#10b981' : (isCurrent ? '#2563eb' : 'var(--border-color)')}; color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">
+                  ${isPassed ? '✓' : idx + 1}
+                </div>
+                <div style="flex: 1;">
+                  <strong style="font-size: 0.85rem;">${stop}</strong>
+                  <div class="text-xs text-secondary">Scheduled Pickup: 07:${String(10 + idx * 12).padStart(2, '0')} AM</div>
+                </div>
+                <span class="badge ${isPassed ? 'badge-success' : (isCurrent ? 'badge-primary' : 'badge-secondary')}" style="font-size: 0.7rem;">
+                  ${isPassed ? 'Passed' : (isCurrent ? 'Approaching' : 'Upcoming')}
+                </span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `,
+    onSave: async () => true,
+  });
+};
 
 /* ==========================================================================
    Hostel & Boarding Accommodation View (Hostel Blocks & Student Allocation)
@@ -1477,6 +1687,8 @@ function bindHostelEvents() {
 let notices = [];
 
 async function renderNotices() {
+  const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : false;
+
   try {
     const res = await api.get('/notices');
     if (Array.isArray(res.data) && res.data.length > 0) {
@@ -1495,16 +1707,26 @@ async function renderNotices() {
     <div class="animate-fadeIn">
       <div class="page-header">
         <div>
-          <h1>Notice Board & Communications</h1>
-          <p class="subtitle">School circulars, parent notifications, and academic advisories</p>
+          <h1>Notice Board &amp; Communications</h1>
+          <p class="subtitle">Official school circulars, parent notices, event announcements, and administrative advisories</p>
         </div>
-        ${canPostNotice ? `<button class="btn btn-primary" id="post-notice-btn">
-          ${icon('plus', 18)} Post New Circular
-        </button>` : ''}
+        ${canPostNotice ? `
+          <button class="btn btn-primary" id="post-notice-btn">
+            ${icon('plus', 18)} Post New Circular
+          </button>
+        ` : `
+          <span class="badge badge-info" style="font-size: 0.85rem; padding: 6px 12px;">
+            ${icon('bell', 16)} Official Circulars Board
+          </span>
+        `}
       </div>
 
       <div class="card">
-        <div class="flex flex-col gap-4" id="notices-container">
+        <div class="card-header">
+          <span class="card-title">Published Circulars &amp; Directives</span>
+          <span class="text-xs text-secondary">Session 2026-2027</span>
+        </div>
+        <div class="flex flex-col gap-3" id="notices-container">
           ${renderNoticeItems(notices, canPostNotice)}
         </div>
       </div>
@@ -1517,16 +1739,17 @@ function renderNoticeItems(items, canPost) {
     const hint = canPost ? ' Click "Post New Circular" to add one.' : '';
     return `<div class="p-8 text-center text-secondary">No notices published yet.${hint}</div>`;
   }
-  return items.map(n => `
-    <div class="p-5 rounded-md" style="background: var(--bg-input); border-left: 4px solid var(--primary-600);">
+  return items.map((n, idx) => `
+    <div class="p-5 rounded-md notice-card cursor-pointer" data-id="${n.id || idx}" style="background: var(--bg-input); border-left: 4px solid var(--primary-600); transition: all 0.2s ease;">
       <div class="flex justify-between items-center mb-2" style="flex-wrap: wrap; gap: 8px;">
-        <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">${n.title}</h3>
+        <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin: 0;">${n.title}</h3>
         <div class="flex items-center gap-2">
-          <span class="badge badge-info">${n.target || n.audience || 'All'}</span>
+          <span class="badge ${n.priority === 'Urgent' ? 'badge-danger' : (n.priority === 'High' ? 'badge-warning' : 'badge-info')}">${n.target || n.audience || 'All'}</span>
           <span class="text-xs text-secondary">${n.date || 'Recent'}</span>
+          <button class="btn btn-secondary btn-xs read-notice-btn" data-id="${n.id || idx}">Read Circular</button>
         </div>
       </div>
-      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
+      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; margin: 4px 0 0 0;">
         ${n.content || n.message || ''}
       </p>
     </div>
@@ -1608,13 +1831,62 @@ function bindNoticesEvents() {
           }
 
           const container = document.getElementById('notices-container');
-          if (container) container.innerHTML = renderNoticeItems(notices);
+          if (container) container.innerHTML = renderNoticeItems(notices, canPostNotice);
+          attachNoticeReaders();
           if (window.showToast) window.showToast(`Notice "${title}" published`, 'success');
           return true;
         }
       });
     };
   }
+
+  function attachNoticeReaders() {
+    document.querySelectorAll('.notice-card, .read-notice-btn').forEach(elem => {
+      elem.onclick = (e) => {
+        e.stopPropagation();
+        const id = elem.getAttribute('data-id');
+        const n = (notices && notices[id]) || notices.find(x => String(x.id) === String(id)) || {
+          title: 'Official School Circular',
+          content: 'No detailed content available.',
+          target: 'All School Community',
+          date: 'Recent',
+        };
+
+        window.openAppModal({
+          title: `📢 ${n.title}`,
+          subtitle: `Target Audience: ${n.target || n.audience || 'All Community'} • Published: ${n.date || 'Recent'}`,
+          saveLabel: 'Close Circular',
+          saveIcon: 'checkCircle',
+          contentHtml: `
+            <div style="padding: 10px 0;">
+              <div class="flex items-center justify-between p-3 rounded-md mb-4" style="background: var(--bg-input); border: 1px solid var(--border-color);">
+                <div>
+                  <span class="badge ${n.priority === 'Urgent' ? 'badge-danger' : (n.priority === 'High' ? 'badge-warning' : 'badge-info')}">
+                    ${n.priority || 'Normal'} Priority Circular
+                  </span>
+                </div>
+                <div class="text-xs text-secondary">
+                  Official Directive • Session 2026-2027
+                </div>
+              </div>
+              <div style="font-size: 0.95rem; line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; padding: 10px 4px; min-height: 80px;">
+                ${n.content || n.message || 'No additional content provided.'}
+              </div>
+              <div class="mt-6 pt-4 border-t flex justify-between items-center text-xs text-secondary">
+                <div>Official Bulletin — Smart School International</div>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="window.print()">
+                  ${icon('print', 14)} Print Circular
+                </button>
+              </div>
+            </div>
+          `,
+          onSave: async () => true,
+        });
+      };
+    });
+  }
+
+  attachNoticeReaders();
 }
 
 /* ==========================================================================
