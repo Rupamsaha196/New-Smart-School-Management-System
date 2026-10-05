@@ -57,12 +57,6 @@ async function renderLibrary() {
 
   const canManageLib = window.canManage ? window.canManage(['librarian', 'teacher']) : true;
 
-  // Students can only VIEW notices - staff/admin roles may post
-  const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : true;
-
-  // Students can only VIEW notices - staff/admin roles may post
-  const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : true;
-
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
