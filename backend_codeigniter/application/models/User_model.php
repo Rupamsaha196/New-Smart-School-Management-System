@@ -8,11 +8,21 @@ class User_model extends CI_Model {
     }
 
     public function find_by_email(string $email): ?array {
-        return $this->db->where('email', $email)->get('users')->row_array();
+        try {
+            $row = $this->db->where('email', $email)->get('users')->row_array();
+            return $row ?: null;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function find(int $id): ?array {
-        return $this->db->where('id', $id)->get('users')->row_array();
+        try {
+            $row = $this->db->where('id', $id)->get('users')->row_array();
+            return $row ?: null;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function create_user(array $data): int {

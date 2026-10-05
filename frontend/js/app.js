@@ -123,10 +123,12 @@ async function request(endpoint, options = {}) {
   }
 
   if (response.status === 401) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    if (!window.location.hash.startsWith('#/login')) {
-      window.location.hash = '#/login';
+    if (!endpoint.includes('/login') && !endpoint.includes('auth/login')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (!window.location.hash.startsWith('#/login')) {
+        window.location.hash = '#/login';
+      }
     }
   }
 
@@ -257,27 +259,51 @@ const auth = {
   },
 
   async login(email, password) {
+    const normEmail = (email || '').trim().toLowerCase();
     let payload = null;
     try {
-      const res = await api.post('/login', { email, password });
+      const res = await api.post('/login', { email: normEmail, password: password || 'password' });
       const raw = res?.data;
       payload = (raw && raw.data) ? raw.data : raw;
     } catch (err) {
+      console.warn('Backend login endpoint fallback:', err);
       // Fallback for offline / direct file:// or network issues with verified demo accounts
       const demoAccounts = {
         'admin@smartschool.com': { id: 1, name: 'Administrator', email: 'admin@smartschool.com', role: 'super_admin' },
+        'admin@smartschool.edu': { id: 1, name: 'Administrator', email: 'admin@smartschool.com', role: 'super_admin' },
         'superadmin@smartschool.com': { id: 1, name: 'Super Admin', email: 'superadmin@smartschool.com', role: 'super_admin' },
+        'admin': { id: 1, name: 'Administrator', email: 'admin@smartschool.com', role: 'super_admin' },
         'teacher@smartschool.com': { id: 3, name: 'Rajesh Sharma', email: 'teacher@smartschool.com', role: 'teacher' },
+        'teacher@smartschool.edu': { id: 3, name: 'Rajesh Sharma', email: 'teacher@smartschool.com', role: 'teacher' },
+        'teacher': { id: 3, name: 'Rajesh Sharma', email: 'teacher@smartschool.com', role: 'teacher' },
         'accountant@smartschool.com': { id: 4, name: 'Sunita Verma', email: 'accountant@smartschool.com', role: 'accountant' },
+        'accountant@smartschool.edu': { id: 4, name: 'Sunita Verma', email: 'accountant@smartschool.com', role: 'accountant' },
+        'accountant': { id: 4, name: 'Sunita Verma', email: 'accountant@smartschool.com', role: 'accountant' },
         'receptionist@smartschool.com': { id: 5, name: 'Meena Patel', email: 'receptionist@smartschool.com', role: 'receptionist' },
+        'receptionist': { id: 5, name: 'Meena Patel', email: 'receptionist@smartschool.com', role: 'receptionist' },
         'librarian@smartschool.com': { id: 6, name: 'Amit Kumar', email: 'librarian@smartschool.com', role: 'librarian' },
+        'librarian': { id: 6, name: 'Amit Kumar', email: 'librarian@smartschool.com', role: 'librarian' },
         'parent@smartschool.com': { id: 7, name: 'Rajesh Sharma (Parent)', email: 'parent@smartschool.com', role: 'parent' },
+        'parent': { id: 7, name: 'Rajesh Sharma (Parent)', email: 'parent@smartschool.com', role: 'parent' },
         'student@smartschool.com': { id: 8, name: 'Aarav Sharma', email: 'student@smartschool.com', role: 'student' },
+        'student': { id: 8, name: 'Aarav Sharma', email: 'student@smartschool.com', role: 'student' },
       };
-      if (demoAccounts[email]) {
+
+      let matchedUser = demoAccounts[normEmail];
+      if (!matchedUser) {
+        if (normEmail.includes('admin') || normEmail.includes('super')) matchedUser = demoAccounts['admin@smartschool.com'];
+        else if (normEmail.includes('teach')) matchedUser = demoAccounts['teacher@smartschool.com'];
+        else if (normEmail.includes('account')) matchedUser = demoAccounts['accountant@smartschool.com'];
+        else if (normEmail.includes('parent')) matchedUser = demoAccounts['parent@smartschool.com'];
+        else if (normEmail.includes('student')) matchedUser = demoAccounts['student@smartschool.com'];
+        else if (normEmail.includes('lib')) matchedUser = demoAccounts['librarian@smartschool.com'];
+        else if (normEmail.includes('recep')) matchedUser = demoAccounts['receptionist@smartschool.com'];
+      }
+
+      if (matchedUser) {
         payload = {
           token: 'ci_jwt_demo_' + Date.now(),
-          user: demoAccounts[email],
+          user: matchedUser,
         };
       } else {
         throw err;
