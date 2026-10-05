@@ -1,3 +1,9 @@
+
+
+
+
+
+
 # 🚀 Smart School Management System – cPanel Deployment Guide
 
 **Infosof Technologies 2026 | Enterprise School ERP**  

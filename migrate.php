@@ -47,11 +47,14 @@ if (file_exists($env_file)) {
 }
 
 // 1. Resolve Database Credentials from Environment (or URL query override)
-$host     = trim($_GET['db_host'] ?? (getenv('DB_HOST') ?: 'localhost'));
-$port     = trim($_GET['db_port'] ?? (getenv('DB_PORT') ?: 3306));
-$database = trim($_GET['db_name'] ?? (getenv('DB_DATABASE') ?: 'smart_school'));
-$username = trim($_GET['db_user'] ?? (getenv('DB_USERNAME') ?: 'root'));
-$password = trim($_GET['db_pass'] ?? (getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : ''));
+$raw_db_url = getenv('MYSQL_URL') ?: getenv('DATABASE_URL');
+$parsed_url = !empty($raw_db_url) ? parse_url($raw_db_url) : null;
+
+$host     = trim($_GET['db_host'] ?? ($parsed_url['host'] ?? (getenv('DB_HOST') ?: 'localhost')));
+$port     = trim($_GET['db_port'] ?? ($parsed_url['port'] ?? (getenv('DB_PORT') ?: 3306)));
+$database = trim($_GET['db_name'] ?? (isset($parsed_url['path']) ? ltrim($parsed_url['path'], '/') : (getenv('DB_DATABASE') ?: 'smart_school')));
+$username = trim($_GET['db_user'] ?? (isset($parsed_url['user']) ? urldecode($parsed_url['user']) : (getenv('DB_USERNAME') ?: 'root')));
+$password = trim($_GET['db_pass'] ?? (isset($parsed_url['pass']) ? urldecode($parsed_url['pass']) : (getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '')));
 
 $masked_pw = strlen($password) > 4 ? substr($password, 0, 2) . '****' . substr($password, -2) : '****';
 echo "Target Host    : {$host}:{$port}\n";
@@ -103,7 +106,7 @@ foreach ($db_candidates as $db_target) {
         ];
 
         // Enable TLS/SSL transport for cloud MySQL providers (TiDB, AWS RDS, etc.) if not local
-        $is_local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', '']);
+        $is_local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', 'db']) && (getenv('DB_SSL') !== 'true');
         if (!$is_local || getenv('DB_SSL') === 'true') {
             $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
             if (file_exists($ca_bundle)) {

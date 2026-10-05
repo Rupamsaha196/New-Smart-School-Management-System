@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.env.local
+*.zip
+scratch/
+.idea/
+.vscode/
+*.code-workspace
+Smart_School_Project_Report_Infosof_Technologies (1).pdf
+PROJECT_ARCHITECTURE_AND_MODULES_REPORT.md
+CPANEL_DEPLOYMENT_GUIDE.md

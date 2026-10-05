@@ -17,11 +17,14 @@ function &DB($params = '', bool $query_builder_override = NULL) {
     $active_group = $active_group ?? 'default';
     $db_config = $db[$active_group] ?? [];
 
-    $host = trim(getenv('DB_HOST') ?: ($db_config['hostname'] ?? 'localhost'));
-    $port = trim(getenv('DB_PORT') ?: ($db_config['port'] ?? '3306'));
-    $database = trim(getenv('DB_DATABASE') ?: ($db_config['database'] ?? 'smart_school'));
-    $username = trim(getenv('DB_USERNAME') ?: ($db_config['username'] ?? 'root'));
-    $password = getenv('DB_PASSWORD') !== false ? trim(getenv('DB_PASSWORD')) : ($db_config['password'] ?? '');
+    $raw_db_url = getenv('MYSQL_URL') ?: getenv('DATABASE_URL');
+    $parsed_url = !empty($raw_db_url) ? parse_url($raw_db_url) : null;
+
+    $host = trim($parsed_url['host'] ?? (getenv('DB_HOST') ?: ($db_config['hostname'] ?? 'localhost')));
+    $port = trim($parsed_url['port'] ?? (getenv('DB_PORT') ?: ($db_config['port'] ?? '3306')));
+    $database = trim(isset($parsed_url['path']) ? ltrim($parsed_url['path'], '/') : (getenv('DB_DATABASE') ?: ($db_config['database'] ?? 'smart_school')));
+    $username = trim(isset($parsed_url['user']) ? urldecode($parsed_url['user']) : (getenv('DB_USERNAME') ?: ($db_config['username'] ?? 'root')));
+    $password = getenv('DB_PASSWORD') !== false ? trim(getenv('DB_PASSWORD')) : (isset($parsed_url['pass']) ? urldecode($parsed_url['pass']) : ($db_config['password'] ?? ''));
     $driver = $db_config['dbdriver'] ?? 'pdo';
 
     $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
@@ -36,7 +39,7 @@ function &DB($params = '', bool $query_builder_override = NULL) {
         ];
 
         // For remote cloud MySQL or if DB_SSL is requested, configure CA bundle
-        $is_local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', '']);
+        $is_local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', 'db']) && (getenv('DB_SSL') !== 'true');
         if (!$is_local || getenv('DB_SSL') === 'true') {
             $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
             if (file_exists($ca_bundle)) {

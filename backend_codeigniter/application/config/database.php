@@ -30,13 +30,16 @@ foreach ($env_search_paths as $env_file) {
 $active_group = 'default';
 $query_builder = TRUE;
 
+$raw_db_url = getenv('MYSQL_URL') ?: getenv('DATABASE_URL');
+$parsed_url = !empty($raw_db_url) ? parse_url($raw_db_url) : null;
+
 $db['default'] = [
     'dsn'          => '',
-    'hostname'     => getenv('DB_HOST') ?: 'localhost',
-    'port'         => getenv('DB_PORT') ?: 3306,
-    'username'     => getenv('DB_USERNAME') ?: 'root',
-    'password'     => getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : '',
-    'database'     => getenv('DB_DATABASE') ?: 'smart_school',
+    'hostname'     => trim($parsed_url['host'] ?? (getenv('DB_HOST') ?: 'localhost')),
+    'port'         => trim($parsed_url['port'] ?? (getenv('DB_PORT') ?: 3306)),
+    'username'     => trim(isset($parsed_url['user']) ? urldecode($parsed_url['user']) : (getenv('DB_USERNAME') ?: 'root')),
+    'password'     => getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : (isset($parsed_url['pass']) ? urldecode($parsed_url['pass']) : ''),
+    'database'     => trim(isset($parsed_url['path']) ? ltrim($parsed_url['path'], '/') : (getenv('DB_DATABASE') ?: 'smart_school')),
     'dbdriver'     => 'pdo',
     'dbprefix'     => '',
     'pconnect'     => FALSE,

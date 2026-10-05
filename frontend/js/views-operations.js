@@ -57,6 +57,12 @@ async function renderLibrary() {
 
   const canManageLib = window.canManage ? window.canManage(['librarian', 'teacher']) : true;
 
+  // Students can only VIEW notices - staff/admin roles may post
+  const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : true;
+
+  // Students can only VIEW notices - staff/admin roles may post
+  const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : true;
+
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
@@ -1496,25 +1502,26 @@ async function renderNotices() {
       <div class="page-header">
         <div>
           <h1>Notice Board & Communications</h1>
-          <p class="subtitle">Broadcast circulars, parent notifications, and academic advisories</p>
+          <p class="subtitle">School circulars, parent notifications, and academic advisories</p>
         </div>
-        <button class="btn btn-primary" id="post-notice-btn">
+        ${canPostNotice ? `<button class="btn btn-primary" id="post-notice-btn">
           ${icon('plus', 18)} Post New Circular
-        </button>
+        </button>` : ''}
       </div>
 
       <div class="card">
         <div class="flex flex-col gap-4" id="notices-container">
-          ${renderNoticeItems(notices)}
+          ${renderNoticeItems(notices, canPostNotice)}
         </div>
       </div>
     </div>
   `;
 }
 
-function renderNoticeItems(items) {
+function renderNoticeItems(items, canPost) {
   if (!items || items.length === 0) {
-    return `<div class="p-8 text-center text-secondary">No notices published yet. Click "Post New Circular".</div>`;
+    const hint = canPost ? ' Click "Post New Circular" to add one.' : '';
+    return `<div class="p-8 text-center text-secondary">No notices published yet.${hint}</div>`;
   }
   return items.map(n => `
     <div class="p-5 rounded-md" style="background: var(--bg-input); border-left: 4px solid var(--primary-600);">
@@ -1533,8 +1540,10 @@ function renderNoticeItems(items) {
 }
 
 function bindNoticesEvents() {
+  // Do not bind posting events for students — button is not rendered for them
+  const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : true;
   const btn = document.getElementById('post-notice-btn');
-  if (btn) {
+  if (btn && canPostNotice) {
     btn.onclick = () => {
       window.openAppModal({
         title: 'Publish New Institutional Notice / Circular',

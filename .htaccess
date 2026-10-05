@@ -11,6 +11,13 @@
     RewriteRule ^\.env.*$ - [F,L]
     RewriteRule ^\.git.*$ - [F,L]
 
+    # Health check routes for Render / Cloud monitoring
+    RewriteRule ^health/?$ index.php [L,QSA]
+    RewriteRule ^api/health/?$ index.php [L,QSA]
+
+    # Database Migration Web Endpoint
+    RewriteRule ^migrate/?$ migrate.php [L,QSA]
+
     # 1. Route API requests directly to CodeIgniter REST Controller
     RewriteRule ^api/?(.*)$ backend_codeigniter/index.php/api/$1 [L,QSA]
 
@@ -24,6 +31,10 @@
 
     # 4. Route root request to frontend single-page application
     RewriteRule ^$ frontend/index.html [L]
+
+    # 5. SPA Client Route Fallback: Allow direct URLs to serve frontend
+    RewriteCond %{REQUEST_URI} !^/(backend_codeigniter|database|frontend)/
+    RewriteRule ^.*$ frontend/index.html [L]
 </IfModule>
 
 # Default Document Index

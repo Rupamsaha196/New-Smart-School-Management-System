@@ -1,0 +1,44 @@
+# ==============================================================================
+# SMART SCHOOL MANAGEMENT SYSTEM - RENDER BLUEPRINT
+# Infosof Technologies 2026
+#
+# 1-Click Render Deployment Specification
+# In Render Dashboard: New -> Blueprint -> Connect this repository.
+# ==============================================================================
+
+services:
+  - type: web
+    name: smart-school-management-system
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: CI_ENV
+        value: production
+      - key: APP_URL
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: AUTO_MIGRATE
+        value: "true"
+      - key: MIGRATION_SECRET
+        generateValue: true
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_ENABLED
+        value: "0"

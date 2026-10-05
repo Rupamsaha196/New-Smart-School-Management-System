@@ -25,14 +25,9 @@ const getApiBase = () => {
       return 'http://localhost:8000/api';
     }
 
-    // Direct local server running on port 8000
-    if ((hostname === '127.0.0.1' || hostname === 'localhost') && port === '8000') {
+    // Direct local server running on port 8000 or port 10000 (Docker)
+    if ((hostname === '127.0.0.1' || hostname === 'localhost') && (port === '8000' || port === '10000')) {
       return window.location.origin + '/api';
-    }
-
-    // Local development with VS Code Live Server, python http.server or separate dev ports
-    if ((hostname === '127.0.0.1' || hostname === 'localhost') && (port === '5500' || port === '3000' || port === '5173')) {
-      return 'http://localhost:8000/api';
     }
 
     // Live cPanel production deployment (subdomain, domain or subfolder)

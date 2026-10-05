@@ -7,11 +7,25 @@
 
 $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
 $parsed_path = parse_url($request_uri, PHP_URL_PATH);
+$clean_path  = '/' . trim($parsed_path, '/');
 
 // 0. Lightweight Health Check endpoint (for Render keep-alive & monitoring)
-if ($parsed_path === '/health' || $parsed_path === '/api/health') {
+if ($clean_path === '/health' || $clean_path === '/api/health') {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['status' => 'healthy', 'time' => time(), 'service' => 'Smart School Management System']);
+    echo json_encode([
+        'status'  => 'healthy',
+        'time'    => time(),
+        'date'    => gmdate('Y-m-d H:i:s \U\T\C'),
+        'service' => 'Smart School Management System',
+        'engine'  => 'PHP ' . PHP_VERSION . ' / CodeIgniter 3.x',
+        'env'     => getenv('CI_ENV') ?: 'production'
+    ]);
+    exit;
+}
+
+// Direct migration endpoint route
+if ($clean_path === '/migrate' || $clean_path === '/migrate.php') {
+    require_once __DIR__ . '/migrate.php';
     exit;
 }
 
