@@ -1182,4 +1182,680 @@ function bindStudentCredentialsEvents() {
   }
 }
 
+/* ==========================================================================
+   Module 39 & Admission Inquiries Desk View
+   Enables Admin, Super Admin & Receptionist to view, manage, contact via WhatsApp,
+   and convert front website admission inquiries into enrolled students.
+   ========================================================================== */
+let allAdmissionInquiries = [];
+let currentInquiryFilter = { search: '', status: 'all', grade: 'all' };
+
+function extractInquiriesData(res) {
+  const payload = res?.data || res || {};
+  let list = [];
+  let sum = { total: 0, new: 0, contacted: 0, in_review: 0, converted: 0, closed: 0 };
+
+  if (payload.inquiries && Array.isArray(payload.inquiries)) {
+    list = payload.inquiries;
+    sum = payload.summary || sum;
+  } else if (Array.isArray(payload)) {
+    list = payload;
+    sum.total = list.length;
+    sum.new = list.filter(i => i.status === 'New').length;
+    sum.contacted = list.filter(i => i.status === 'Contacted').length;
+    sum.converted = list.filter(i => i.status === 'Converted').length;
+  } else if (res?.inquiries && Array.isArray(res.inquiries)) {
+    list = res.inquiries;
+    sum = res.summary || sum;
+  }
+
+  return { inquiries: list, summary: sum };
+}
+
+async function renderAdmissionInquiries() {
+  let inquiries = [];
+  let summary = { total: 0, new: 0, contacted: 0, in_review: 0, converted: 0, closed: 0 };
+  let fetchError = false;
+
+  try {
+    const rawRes = await api.get('/website/inquiries');
+    const parsed = extractInquiriesData(rawRes);
+    inquiries = parsed.inquiries;
+    summary = parsed.summary;
+    allAdmissionInquiries = inquiries;
+  } catch (err) {
+    console.error('Failed to load inquiries:', err);
+    fetchError = true;
+    allAdmissionInquiries = [];
+  }
+
+  const gradesList = [
+    'Pre-Primary / Nursery',
+    'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+    'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
+    'Class 11 Science', 'Class 11 Commerce', 'Class 12 Science', 'Class 12 Commerce'
+  ];
+
+  return `
+    <div class="animate-fadeIn">
+      <div class="page-header">
+        <div>
+          <div class="flex items-center gap-2">
+            <h1>Online Admission Inquiries</h1>
+            <span class="badge badge-primary" style="font-size:0.75rem; font-weight:700;">Live Funnel</span>
+          </div>
+          <p class="subtitle">Real-time prospective student inquiries submitted from Front Website &amp; WhatsApp</p>
+        </div>
+        <div class="flex gap-2">
+          <a href="#/website" class="btn btn-secondary btn-sm" target="_blank">
+            ${icon('home', 16)} Front Website
+          </a>
+          <button id="btn-add-walkin-inquiry" class="btn btn-primary btn-sm">
+            ${icon('plus', 16)} Log Walk-In Inquiry
+          </button>
+        </div>
+      </div>
+
+      ${fetchError ? `
+        <div class="card mb-4" style="background:rgba(239,68,68,0.1); border-left:4px solid var(--danger-500); padding:14px;">
+          <div class="text-sm font-semibold" style="color:var(--danger-500);">Could not load live inquiries from server.</div>
+        </div>
+      ` : ''}
+
+      <!-- Inquiry Metrics Counter Cards -->
+      <div class="grid-stats mb-6">
+        <div class="stat-card stat-primary animate-slideUp">
+          <div class="stat-icon">${icon('clipboard', 24)}</div>
+          <div class="stat-value" id="stat-total-inq">${summary.total}</div>
+          <div class="stat-label">Total Inquiries Received</div>
+          <span class="stat-change positive">Centralized Live MySQL DB</span>
+        </div>
+        <div class="stat-card animate-slideUp" style="animation-delay:60ms;">
+          <div class="stat-icon" style="background:rgba(239,68,68,0.15); color:var(--danger-500);">
+            ${icon('bell', 24)}
+          </div>
+          <div class="stat-value" style="color:var(--danger-500);" id="stat-new-inq">${summary.new}</div>
+          <div class="stat-label">New / Pending Response</div>
+          <span class="stat-change ${summary.new > 0 ? '' : 'positive'}" style="${summary.new > 0 ? 'color:var(--danger-500); font-weight:700;' : ''}">
+            ${summary.new > 0 ? '⚠️ Immediate follow-up required' : 'All inquiries processed'}
+          </span>
+        </div>
+        <div class="stat-card animate-slideUp" style="animation-delay:120ms;">
+          <div class="stat-icon" style="background:rgba(245,158,11,0.15); color:var(--warning-500);">
+            ${icon('chat', 24)}
+          </div>
+          <div class="stat-value" id="stat-contacted-inq">${(summary.contacted || 0) + (summary.in_review || 0)}</div>
+          <div class="stat-label">In Discussion / Contacted</div>
+          <span class="stat-change positive">Counselor outreach active</span>
+        </div>
+        <div class="stat-card animate-slideUp" style="animation-delay:180ms;">
+          <div class="stat-icon" style="background:rgba(16,185,129,0.15); color:var(--success-500);">
+            ${icon('userPlus', 24)}
+          </div>
+          <div class="stat-value" style="color:var(--success-500);" id="stat-converted-inq">${summary.converted}</div>
+          <div class="stat-label">Converted to Admission</div>
+          <span class="stat-change positive">Admitted to Student Directory</span>
+        </div>
+      </div>
+
+      <!-- Filter Controls Toolbar -->
+      <div class="card mb-4" style="padding:14px 18px;">
+        <div class="flex justify-between items-center" style="flex-wrap:wrap; gap:12px;">
+          <div class="flex items-center gap-3" style="flex:1; min-width:280px;">
+            <div style="position:relative; width:100%; max-width:360px;">
+              <input type="text" id="inq-search" class="form-input" placeholder="Search by parent, student, phone, ID..." style="padding-left:36px;" />
+              <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-secondary); pointer-events:none;">
+                ${icon('search', 16)}
+              </span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2" style="flex-wrap:wrap;">
+            <select id="inq-status-filter" class="form-select" style="min-width:140px;">
+              <option value="all" selected>All Statuses</option>
+              <option value="New">New / Unread</option>
+              <option value="Contacted">Contacted</option>
+              <option value="In Review">In Review</option>
+              <option value="Converted">Converted</option>
+              <option value="Closed">Closed</option>
+            </select>
+            <select id="inq-grade-filter" class="form-select" style="min-width:140px;">
+              <option value="all" selected>All Grades</option>
+              ${gradesList.map(g => `<option value="${g}">${g}</option>`).join('')}
+            </select>
+            <button id="inq-refresh-btn" class="btn btn-secondary btn-sm" title="Refresh Live Stream">
+              🔄 Refresh
+            </button>
+            <button id="inq-export-csv" class="btn btn-secondary btn-sm" title="Export inquiries to CSV">
+              ${icon('doc', 16)} Export CSV
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inquiries Table Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="flex items-center gap-2">
+            <span class="card-title">${icon('clipboard', 18)} Live Inquiries Stream</span>
+            <span id="inq-filtered-count" class="badge badge-secondary" style="font-size:0.75rem;">${inquiries.length} records</span>
+          </div>
+          <span class="text-xs text-secondary">Tip: Click WhatsApp to open pre-filled chat with parent</span>
+        </div>
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:130px;">Inquiry ID</th>
+                <th>Parent &amp; Student</th>
+                <th>Target Grade</th>
+                <th>Contact Details</th>
+                <th>Questions / Notes</th>
+                <th style="width:130px;">Status</th>
+                <th style="width:180px; text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inquiries-table-body">
+              ${renderInquiryRows(inquiries)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderInquiryRows(inquiries) {
+  if (!inquiries || inquiries.length === 0) {
+    return `
+      <tr>
+        <td colspan="7" class="text-center py-8 text-secondary">
+          <div style="font-size: 2.2rem; margin-bottom: 8px;">📭</div>
+          <div style="font-weight: 600;">No admission inquiries found</div>
+          <div class="text-xs mt-1">Inquiries submitted via the front website or walk-in desk will appear here automatically.</div>
+        </td>
+      </tr>
+    `;
+  }
+
+  return inquiries.map(inq => {
+    const isNew = inq.status === 'New';
+    const statusColors = {
+      'New': { bg: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: '#fca5a5' },
+      'Contacted': { bg: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: '#fcd34d' },
+      'In Review': { bg: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: '#93c5fd' },
+      'Converted': { bg: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: '#6ee7b7' },
+      'Closed': { bg: 'rgba(107, 114, 128, 0.12)', color: '#4b5563', border: '#d1d5db' },
+    };
+    const sc = statusColors[inq.status] || statusColors['New'];
+    const cleanPhone = (inq.phone || '').replace(/[^0-9]/g, '');
+    const waText = encodeURIComponent(`Hello ${inq.parent_name}, Greetings from Smart School International admissions desk regarding your inquiry (${inq.inquiry_id}) for ${inq.student_name || 'your child'} for ${inq.target_class}. How may we assist you with admissions?`);
+    const dateDisplay = inq.created_at ? inq.created_at.substring(0, 16) : 'Just now';
+
+    return `
+      <tr class="inquiry-row-${inq.id}" style="${isNew ? 'background: rgba(239, 68, 68, 0.02);' : ''}">
+        <td>
+          <div class="flex items-center gap-1">
+            ${isNew ? '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444; animation:pulse 1.5s infinite;" title="New Unread Inquiry"></span>' : ''}
+            <span class="badge ${isNew ? 'badge-primary' : 'badge-secondary'}" style="font-family:monospace; font-size:0.75rem; font-weight:700;">
+              ${inq.inquiry_id}
+            </span>
+          </div>
+          <div class="text-xs text-secondary mt-1" style="font-size:0.7rem;">${dateDisplay}</div>
+        </td>
+        <td>
+          <div style="font-weight: 700; font-size: 0.875rem;">${inq.parent_name}</div>
+          <div class="text-xs text-secondary flex items-center gap-1 mt-0.5">
+            <span>Child:</span>
+            <strong style="color:var(--text-primary);">${inq.student_name || 'Not provided'}</strong>
+          </div>
+        </td>
+        <td>
+          <span class="badge" style="background:var(--bg-input); font-weight:600; color:var(--text-primary); border:1px solid var(--border-secondary);">
+            ${inq.target_class || 'Class 1'}
+          </span>
+        </td>
+        <td>
+          <div class="font-mono text-xs font-semibold">${inq.phone || '—'}</div>
+          ${inq.email ? `<div class="text-xs text-secondary">${inq.email}</div>` : ''}
+          <div class="mt-1">
+            <a href="https://wa.me/${cleanPhone}?text=${waText}" target="_blank" class="btn btn-xs btn-success" style="padding:2px 8px; font-size:0.7rem; display:inline-flex; align-items:center; gap:4px;" title="Chat with Parent on WhatsApp">
+              ${icon('chat', 12)} WhatsApp
+            </a>
+          </div>
+        </td>
+        <td style="max-width:240px;">
+          <div class="text-xs text-secondary" style="overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${inq.message || ''}">
+            ${inq.message || '—'}
+          </div>
+          ${inq.counselor_notes ? `
+            <div class="text-xs mt-1 p-1 rounded" style="background:rgba(245,158,11,0.1); color:#b45309; border-left:2px solid #f59e0b;">
+              <strong>Note:</strong> ${inq.counselor_notes}
+            </div>
+          ` : ''}
+        </td>
+        <td>
+          <select class="inq-status-changer form-select" data-id="${inq.id}" style="padding:3px 8px; font-size:0.75rem; font-weight:700; background:${sc.bg}; color:${sc.color}; border:1px solid ${sc.border}; border-radius:12px; cursor:pointer;">
+            <option value="New" ${inq.status === 'New' ? 'selected' : ''}>New</option>
+            <option value="Contacted" ${inq.status === 'Contacted' ? 'selected' : ''}>Contacted</option>
+            <option value="In Review" ${inq.status === 'In Review' ? 'selected' : ''}>In Review</option>
+            <option value="Converted" ${inq.status === 'Converted' ? 'selected' : ''}>Converted</option>
+            <option value="Closed" ${inq.status === 'Closed' ? 'selected' : ''}>Closed</option>
+          </select>
+        </td>
+        <td style="text-align:right;">
+          <div class="flex items-center justify-end gap-1">
+            <button class="btn btn-xs btn-primary btn-convert-inquiry" data-id="${inq.id}" data-parent="${encodeURIComponent(inq.parent_name || '')}" data-student="${encodeURIComponent(inq.student_name || '')}" data-phone="${encodeURIComponent(inq.phone || '')}" data-email="${encodeURIComponent(inq.email || '')}" data-grade="${encodeURIComponent(inq.target_class || '')}" title="Convert to Official Enrolled Student">
+              ${icon('userPlus', 12)} Convert
+            </button>
+            <button class="btn btn-xs btn-secondary btn-notes-inquiry" data-id="${inq.id}" data-notes="${encodeURIComponent(inq.counselor_notes || '')}" data-parent="${encodeURIComponent(inq.parent_name || '')}" title="Add / View Counselor Notes">
+              ${icon('pencil', 12)}
+            </button>
+            <button class="btn btn-xs btn-danger btn-delete-inquiry" data-id="${inq.id}" data-inqid="${inq.inquiry_id}" title="Delete Inquiry">
+              ${icon('trash', 12)}
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function bindAdmissionInquiriesEvents() {
+  const tbody = document.getElementById('inquiries-table-body');
+  const searchInput = document.getElementById('inq-search');
+  const statusFilter = document.getElementById('inq-status-filter');
+  const gradeFilter = document.getElementById('inq-grade-filter');
+  const refreshBtn = document.getElementById('inq-refresh-btn');
+  const exportBtn = document.getElementById('inq-export-csv');
+  const walkinBtn = document.getElementById('btn-add-walkin-inquiry');
+
+  function filterAndRender() {
+    const search = (searchInput?.value || '').toLowerCase().trim();
+    const status = statusFilter?.value || 'all';
+    const grade = gradeFilter?.value || 'all';
+
+    let filtered = allAdmissionInquiries.filter(item => {
+      const matchSearch = !search ||
+        (item.parent_name && item.parent_name.toLowerCase().includes(search)) ||
+        (item.student_name && item.student_name.toLowerCase().includes(search)) ||
+        (item.phone && item.phone.toLowerCase().includes(search)) ||
+        (item.inquiry_id && item.inquiry_id.toLowerCase().includes(search)) ||
+        (item.email && item.email.toLowerCase().includes(search));
+
+      const matchStatus = status === 'all' || item.status === status;
+      const matchGrade = grade === 'all' || item.target_class === grade;
+
+      return matchSearch && matchStatus && matchGrade;
+    });
+
+    if (tbody) tbody.innerHTML = renderInquiryRows(filtered);
+    const countBadge = document.getElementById('inq-filtered-count');
+    if (countBadge) countBadge.textContent = `${filtered.length} records`;
+    bindRowActions();
+  }
+
+  function bindRowActions() {
+    // 1. Status Changer Dropdowns
+    document.querySelectorAll('.inq-status-changer').forEach(select => {
+      select.onchange = async () => {
+        const id = select.getAttribute('data-id');
+        const newStatus = select.value;
+        try {
+          await api.post(`/website/inquiries/update/${id}`, { status: newStatus });
+          showToast(`Inquiry status updated to ${newStatus}`, 'success');
+          const found = allAdmissionInquiries.find(x => String(x.id) === String(id));
+          if (found) found.status = newStatus;
+          if (typeof broadcastDbMutation === 'function') {
+            broadcastDbMutation('/website/inquiries', 'status_changed');
+          }
+          filterAndRender();
+        } catch (err) {
+          showToast('Failed to update status', 'danger');
+        }
+      };
+    });
+
+    // 2. Convert to Admission Button
+    document.querySelectorAll('.btn-convert-inquiry').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        const parentName = decodeURIComponent(btn.getAttribute('data-parent') || '');
+        const studentName = decodeURIComponent(btn.getAttribute('data-student') || '');
+        const phone = decodeURIComponent(btn.getAttribute('data-phone') || '');
+        const email = decodeURIComponent(btn.getAttribute('data-email') || '');
+        const grade = decodeURIComponent(btn.getAttribute('data-grade') || '');
+
+        window.showModal({
+          title: 'Convert Inquiry to Enrolled Student',
+          content: `
+            <div>
+              <p class="text-sm text-secondary mb-4">
+                You are about to initiate formal admission for <strong>${studentName || parentName + "'s child"}</strong>.
+                This will automatically pre-fill the 4-step verified admission application and update the inquiry status to <strong>Converted</strong>.
+              </p>
+              <div class="p-3 rounded-md mb-4 text-xs" style="background:var(--bg-input); line-height:1.8;">
+                <div><strong>Parent / Guardian:</strong> ${parentName}</div>
+                <div><strong>Student Name:</strong> ${studentName || 'To be completed'}</div>
+                <div><strong>Contact Mobile:</strong> ${phone}</div>
+                <div><strong>Applying For:</strong> ${grade}</div>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button class="btn btn-secondary btn-sm" onclick="window.closeModal()">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="confirm-convert-btn">
+                  ${icon('userPlus', 16)} Open Admission Form
+                </button>
+              </div>
+            </div>
+          `
+        });
+
+        setTimeout(() => {
+          const confirmBtn = document.getElementById('confirm-convert-btn');
+          if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+              try {
+                await api.post(`/website/inquiries/update/${id}`, { status: 'Converted' });
+              } catch {}
+
+              sessionStorage.setItem('pending_admission_inquiry', JSON.stringify({
+                parentName,
+                studentName,
+                phone,
+                email,
+                grade
+              }));
+
+              window.closeModal();
+              showToast('Redirecting to 4-Step Admission Wizard with pre-filled details...', 'success');
+              window.location.hash = '#/students/admission';
+            };
+          }
+        }, 50);
+      };
+    });
+
+    // 3. Counselor Notes Button
+    document.querySelectorAll('.btn-notes-inquiry').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        const curNotes = decodeURIComponent(btn.getAttribute('data-notes') || '');
+        const parentName = decodeURIComponent(btn.getAttribute('data-parent') || '');
+
+        window.showModal({
+          title: `Counselor Notes — ${parentName}`,
+          content: `
+            <div>
+              <div class="form-group mb-4">
+                <label class="form-label">Counselor Call / Follow-up Notes</label>
+                <textarea id="modal-counselor-notes" class="form-textarea" rows="4" placeholder="e.g. Spoke to mother, interested in transport from Newtown. Scheduled campus visit on Friday 11:30 AM...">${curNotes}</textarea>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button class="btn btn-secondary btn-sm" onclick="window.closeModal()">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="save-counselor-notes-btn">
+                  ${icon('checkCircle', 16)} Save Notes
+                </button>
+              </div>
+            </div>
+          `
+        });
+
+        setTimeout(() => {
+          const saveBtn = document.getElementById('save-counselor-notes-btn');
+          if (saveBtn) {
+            saveBtn.onclick = async () => {
+              const notes = document.getElementById('modal-counselor-notes')?.value || '';
+              try {
+                await api.post(`/website/inquiries/update/${id}`, { counselor_notes: notes });
+                showToast('Counselor notes saved successfully', 'success');
+                const found = allAdmissionInquiries.find(x => String(x.id) === String(id));
+                if (found) found.counselor_notes = notes;
+                window.closeModal();
+                filterAndRender();
+              } catch (err) {
+                showToast('Failed to save notes', 'danger');
+              }
+            };
+          }
+        }, 50);
+      };
+    });
+
+    // 4. Delete Inquiry Button
+    document.querySelectorAll('.btn-delete-inquiry').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        const inqId = btn.getAttribute('data-inqid') || 'inquiry';
+
+        window.showModal({
+          title: 'Confirm Deletion',
+          content: `
+            <div>
+              <p class="text-sm text-secondary mb-4">
+                Are you sure you want to permanently delete admission inquiry <strong>${inqId}</strong>? This action cannot be undone.
+              </p>
+              <div class="flex justify-end gap-2">
+                <button class="btn btn-secondary btn-sm" onclick="window.closeModal()">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="confirm-del-inq-btn">
+                  ${icon('trash', 16)} Delete Inquiry
+                </button>
+              </div>
+            </div>
+          `
+        });
+
+        setTimeout(() => {
+          const confirmDelBtn = document.getElementById('confirm-del-inq-btn');
+          if (confirmDelBtn) {
+            confirmDelBtn.onclick = async () => {
+              try {
+                await api.post(`/website/inquiries/delete/${id}`, {});
+                showToast(`Inquiry ${inqId} deleted`, 'success');
+                allAdmissionInquiries = allAdmissionInquiries.filter(x => String(x.id) !== String(id));
+                window.closeModal();
+                filterAndRender();
+              } catch (err) {
+                showToast('Failed to delete inquiry', 'danger');
+              }
+            };
+          }
+        }, 50);
+      };
+    });
+  }
+
+  // Filter Event Listeners
+  if (searchInput) searchInput.oninput = filterAndRender;
+  if (statusFilter) statusFilter.onchange = filterAndRender;
+  if (gradeFilter) gradeFilter.onchange = filterAndRender;
+
+  // Refresh Event Listener
+  if (refreshBtn) {
+    refreshBtn.onclick = async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Refreshing...';
+      try {
+        const rawRes = await api.get('/website/inquiries');
+        const parsed = extractInquiriesData(rawRes);
+        allAdmissionInquiries = parsed.inquiries;
+        const totEl = document.getElementById('stat-total-inq');
+        const newEl = document.getElementById('stat-new-inq');
+        const conEl = document.getElementById('stat-contacted-inq');
+        const cvtEl = document.getElementById('stat-converted-inq');
+        if (totEl) totEl.textContent = parsed.summary.total;
+        if (newEl) newEl.textContent = parsed.summary.new;
+        if (conEl) conEl.textContent = (parsed.summary.contacted || 0) + (parsed.summary.in_review || 0);
+        if (cvtEl) cvtEl.textContent = parsed.summary.converted;
+
+        filterAndRender();
+        showToast('Inquiries refreshed from live database', 'success');
+      } catch (err) {
+        showToast('Failed to refresh inquiries', 'danger');
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 Refresh';
+      }
+    };
+  }
+
+  // Export CSV Listener
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      if (!allAdmissionInquiries || allAdmissionInquiries.length === 0) {
+        showToast('No inquiries to export', 'warning');
+        return;
+      }
+      const rows = [
+        ['Inquiry ID', 'Parent Name', 'Student Name', 'Mobile', 'Email', 'Target Grade', 'Status', 'Date Received', 'Message', 'Counselor Notes']
+      ];
+      allAdmissionInquiries.forEach(i => {
+        rows.push([
+          i.inquiry_id || '',
+          i.parent_name || '',
+          i.student_name || '',
+          i.phone || '',
+          i.email || '',
+          i.target_class || '',
+          i.status || '',
+          i.created_at || '',
+          (i.message || '').replace(/"/g, '""'),
+          (i.counselor_notes || '').replace(/"/g, '""')
+        ]);
+      });
+      const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `Admission_Inquiries_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Exported Admission Inquiries to CSV', 'success');
+    };
+  }
+
+  // Log Walk-In Inquiry Modal
+  if (walkinBtn) {
+    walkinBtn.onclick = () => {
+      window.showModal({
+        title: 'Log Walk-In / Phone Admission Inquiry',
+        content: `
+          <form id="modal-walkin-inq-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Parent / Guardian Name *</label>
+                <input type="text" class="form-input" id="walkin-parent" placeholder="e.g. Ramesh Chandra" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contact Mobile *</label>
+                <input type="tel" class="form-input" id="walkin-phone" placeholder="10-digit number" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Student / Child Name</label>
+                <input type="text" class="form-input" id="walkin-student" placeholder="Child's full name" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Applying for Grade</label>
+                <select class="form-select" id="walkin-grade">
+                  <option value="Pre-Primary / Nursery">Pre-Primary / Nursery</option>
+                  <option value="Class 1">Class 1</option>
+                  <option value="Class 2">Class 2</option>
+                  <option value="Class 3">Class 3</option>
+                  <option value="Class 4">Class 4</option>
+                  <option value="Class 5" selected>Class 5</option>
+                  <option value="Class 6">Class 6</option>
+                  <option value="Class 7">Class 7</option>
+                  <option value="Class 8">Class 8</option>
+                  <option value="Class 9">Class 9</option>
+                  <option value="Class 10">Class 10</option>
+                  <option value="Class 11 Science">Class 11 Science</option>
+                  <option value="Class 11 Commerce">Class 11 Commerce</option>
+                  <option value="Class 12 Science">Class 12 Science</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Parent Email (Optional)</label>
+              <input type="email" class="form-input" id="walkin-email" placeholder="parent@example.com" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Inquiry Details / Requirements</label>
+              <textarea class="form-textarea" id="walkin-message" rows="3" placeholder="Notes on previous school, medium of instruction, transport query..."></textarea>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.closeModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-sm" id="modal-walkin-submit-btn">
+                ${icon('checkCircle', 16)} Register Inquiry
+              </button>
+            </div>
+          </form>
+        `
+      });
+
+      setTimeout(() => {
+        const form = document.getElementById('modal-walkin-inq-form');
+        if (form) {
+          form.onsubmit = async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('modal-walkin-submit-btn');
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.innerHTML = 'Registering...';
+            }
+
+            const parentName  = document.getElementById('walkin-parent')?.value?.trim();
+            const phone       = document.getElementById('walkin-phone')?.value?.trim();
+            const studentName = document.getElementById('walkin-student')?.value?.trim() || '';
+            const grade       = document.getElementById('walkin-grade')?.value || 'Class 1';
+            const email       = document.getElementById('walkin-email')?.value?.trim() || '';
+            const message     = document.getElementById('walkin-message')?.value?.trim() || 'Offline walk-in inquiry';
+
+            try {
+              const res = await api.post('/website/inquiry', {
+                parent_name: parentName,
+                phone: phone,
+                student_name: studentName,
+                email: email,
+                target_class: grade,
+                message: message
+              });
+              const inq = (res && res.data && res.data.data) ? res.data.data : ((res && res.data) ? res.data : (res || {}));
+              showToast(`Walk-in inquiry ${inq.inquiry_id || ''} registered successfully!`, 'success');
+              window.closeModal();
+
+              // Re-fetch live inquiries
+              const rawRes = await api.get('/website/inquiries');
+              const parsed = extractInquiriesData(rawRes);
+              allAdmissionInquiries = parsed.inquiries;
+
+              const totEl = document.getElementById('stat-total-inq');
+              const newEl = document.getElementById('stat-new-inq');
+              const conEl = document.getElementById('stat-contacted-inq');
+              const cvtEl = document.getElementById('stat-converted-inq');
+              if (totEl) totEl.textContent = parsed.summary.total;
+              if (newEl) newEl.textContent = parsed.summary.new;
+              if (conEl) conEl.textContent = (parsed.summary.contacted || 0) + (parsed.summary.in_review || 0);
+              if (cvtEl) cvtEl.textContent = parsed.summary.converted;
+
+              filterAndRender();
+            } catch (err) {
+              showToast(err.message || 'Failed to register walk-in inquiry', 'danger');
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Register Inquiry';
+              }
+            }
+          };
+        }
+      }, 50);
+    };
+  }
+
+  // Initial filter & render to populate and bind all rows immediately
+  filterAndRender();
+}
+
+
+
 

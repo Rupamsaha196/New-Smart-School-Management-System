@@ -399,4 +399,39 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
       window.showToast(`CSV file "${filename}.csv" downloaded successfully!`, 'success');
     }
   };
+
+  window.closeModal = function() {
+    const modalRoot = document.getElementById('modal-root');
+    if (modalRoot) modalRoot.innerHTML = '';
+  };
+
+  window.showModal = function({ title, content, subtitle = '', size = 'md' }) {
+    const modalRoot = document.getElementById('modal-root');
+    if (!modalRoot) return;
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop" id="app-dynamic-modal-backdrop" style="position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,0.65); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div class="modal-dialog modal-${size}" style="background:var(--bg-card, #ffffff); color:var(--text-primary, #1e293b); border:1px solid var(--border-secondary, #e2e8f0); border-radius:var(--radius-lg, 12px); box-shadow:var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1)); max-width:600px; width:100%; overflow:hidden; animation:scaleUp 0.18s cubic-bezier(0.16,1,0.3,1);">
+          <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:18px 24px; border-bottom:1px solid var(--border-secondary, #e2e8f0);">
+            <div>
+              <span class="modal-title" style="font-weight:700; font-size:1.1rem; color:var(--text-primary);">${title}</span>
+              ${subtitle ? `<div class="text-xs text-secondary mt-1">${subtitle}</div>` : ''}
+            </div>
+            <button class="modal-close" id="app-dynamic-modal-close-x" style="background:none; border:none; font-size:1.6rem; cursor:pointer; color:var(--text-secondary); line-height:1;" title="Close">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:24px; max-height:75vh; overflow-y:auto;">
+            ${content}
+          </div>
+        </div>
+      </div>
+    `;
+    const closeBtn = document.getElementById('app-dynamic-modal-close-x');
+    if (closeBtn) closeBtn.onclick = window.closeModal;
+    const backdrop = document.getElementById('app-dynamic-modal-backdrop');
+    if (backdrop) {
+      backdrop.onclick = (e) => {
+        if (e.target === backdrop) window.closeModal();
+      };
+    }
+  };
 })();
+

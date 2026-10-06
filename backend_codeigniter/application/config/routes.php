@@ -142,9 +142,13 @@ $route['api/backup/restore']                = 'settings/backup_restore';
 $route['api/backup/verify']                 = 'settings/backup_verify';
 $route['api/custom-fields']                 = 'settings/custom_fields';
 
-// ── Front Website ────────────────────────────────────────────────────
+// ── Front Website & Inquiries ────────────────────────────────────────
 $route['api/website/inquiry']               = 'website/inquiry';
+$route['api/website/inquiries']             = 'website/inquiries';
+$route['api/website/inquiries/update/(:num)'] = 'website/update_inquiry/$1';
+$route['api/website/inquiries/delete/(:num)'] = 'website/delete_inquiry/$1';
 $route['api/website/info']                  = 'website/info';
+
 
 // ── Scheduled Jobs & Background Cron ─────────────────────────────────
 $route['api/cron/run']                      = 'cron/run';

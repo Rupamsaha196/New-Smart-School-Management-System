@@ -211,6 +211,18 @@ class Dashboard extends REST_Controller {
             ->group_by('department')
             ->get('staff')->result_array();
 
+        // 8. Admission Inquiries Analytics
+        $total_inquiries = 0;
+        $new_inquiries = 0;
+        try {
+            $inq_row = $this->db->select("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as count_new
+            ")->get('admission_inquiries')->row_array();
+            $total_inquiries = (int)($inq_row['total'] ?? 0);
+            $new_inquiries   = (int)($inq_row['count_new'] ?? 0);
+        } catch (\Throwable $e) {}
+
         $this->response([
             'role'              => 'admin',
             'total_students'    => $total_students,
@@ -219,6 +231,8 @@ class Dashboard extends REST_Controller {
             'total_parents'     => $total_parents,
             'total_classes'     => $total_classes,
             'total_exams'       => $total_exams,
+            'total_inquiries'   => $total_inquiries,
+            'new_inquiries'     => $new_inquiries,
             'fees_collected'    => $fees_collected,
             'fees_total'        => $fees_total,
             'fees_due'          => $fees_due,
@@ -649,11 +663,25 @@ class Dashboard extends REST_Controller {
         // Total classes
         $total_classes = (int)$this->db->count_all_results('school_classes');
 
+        // Inquiries summary
+        $total_inquiries = 0;
+        $new_inquiries = 0;
+        try {
+            $inq_row = $this->db->select("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as count_new
+            ")->get('admission_inquiries')->row_array();
+            $total_inquiries = (int)($inq_row['total'] ?? 0);
+            $new_inquiries   = (int)($inq_row['count_new'] ?? 0);
+        } catch (\Throwable $e) {}
+
         $this->response([
             'role'              => 'receptionist',
             'total_students'    => $total_students,
             'total_active'      => $total_active,
             'new_admissions'    => $new_admissions,
+            'total_inquiries'   => $total_inquiries,
+            'new_inquiries'     => $new_inquiries,
             'today_attendance'  => $today_att,
             'recent_admissions' => $recent_admissions,
             'recent_notices'    => $recent_notices,

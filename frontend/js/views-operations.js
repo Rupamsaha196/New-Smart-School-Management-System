@@ -2063,8 +2063,24 @@ function bindMobileAppEvents() {
    Module 39: Front Website & Public Portal View
    ========================================================================== */
 async function renderFrontWebsite() {
+  const currentUser = typeof auth !== 'undefined' ? auth.getUser() : null;
+  const isStaff = currentUser && ['super_admin', 'admin', 'receptionist'].includes(currentUser.role);
+
   return `
     <div class="animate-fadeIn">
+      ${isStaff ? `
+        <!-- Staff Admin Banner for Inquiries -->
+        <div class="card mb-4" style="background: linear-gradient(90deg, rgba(37,99,235,0.08), rgba(99,102,241,0.08)); border: 1px solid var(--primary-500); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: var(--radius-md); flex-wrap: wrap; gap: 10px;">
+          <div class="flex items-center gap-2">
+            <span style="color: var(--primary-600);">${icon('shield', 20)}</span>
+            <span style="font-size: 0.875rem; font-weight: 600;">Staff Management Notice: You are previewing the public front portal. Inquiries submitted here stream directly to your Central Admissions Desk.</span>
+          </div>
+          <a href="#/students/inquiries" class="btn btn-primary btn-sm">
+            ${icon('clipboard', 16)} View Inquiries Stream &rarr;
+          </a>
+        </div>
+      ` : ''}
+
       <!-- Website Header Navigation -->
       <div class="card mb-6" style="padding: 14px 24px;">
         <div class="flex justify-between items-center" style="flex-wrap: wrap; gap: 12px;">
@@ -2079,6 +2095,7 @@ async function renderFrontWebsite() {
             <a href="#/website" class="btn btn-primary btn-sm">Home</a>
             <a href="#/students/admission" class="btn btn-secondary btn-sm">Admissions 2026</a>
             <a href="#/notices" class="btn btn-secondary btn-sm">Circulars</a>
+            ${isStaff ? `<a href="#/students/inquiries" class="btn btn-outline btn-sm">${icon('clipboard', 16)} Inquiries Desk</a>` : ''}
             <a href="#/dashboard" class="btn btn-secondary btn-sm">Staff & Parent Portal</a>
             <button class="btn btn-success btn-sm" onclick="openWhatsAppModal()">
               ${icon('chat', 16)} WhatsApp Desk
@@ -2199,11 +2216,82 @@ async function renderFrontWebsite() {
 function bindFrontWebsiteEvents() {
   const inqForm = document.getElementById('public-inquiry-form');
   if (inqForm) {
-    inqForm.onsubmit = (e) => {
+    inqForm.onsubmit = async (e) => {
       e.preventDefault();
-      const parent = document.getElementById('inq-parent-name')?.value;
-      showToast(`Thank you ${parent}! Your admission inquiry has been logged. Our admissions counselor will contact you.`, 'success');
-      inqForm.reset();
+      const parentName  = document.getElementById('inq-parent-name')?.value?.trim();
+      const phone       = document.getElementById('inq-phone')?.value?.trim();
+      const studentName = document.getElementById('inq-student-name')?.value?.trim() || '';
+      const grade       = document.getElementById('inq-grade')?.value || 'Class 1';
+      const message     = document.getElementById('inq-message')?.value?.trim() || 'Online admission inquiry';
+
+      if (!parentName || !phone) {
+        showToast('Please fill in required parent name and contact mobile number.', 'warning');
+        return;
+      }
+
+      const submitBtn = inqForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn ? submitBtn.innerHTML : 'Submit Admission Inquiry';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = 'Submitting Inquiry...';
+      }
+
+      try {
+        const res = await api.post('/website/inquiry', {
+          parent_name: parentName,
+          phone: phone,
+          student_name: studentName,
+          target_class: grade,
+          message: message
+        });
+
+        const inquiryData = (res && res.data) ? res.data : (res || {});
+        const inquiryId = inquiryData.inquiry_id || 'INQ-2026';
+
+        showToast(`Admission inquiry ${inquiryId} submitted! Our admissions counselor will contact you.`, 'success');
+        if (typeof broadcastDbMutation === 'function') {
+          broadcastDbMutation('/website/inquiries', 'inquiry_created');
+        }
+
+        // Show confirmation modal with Reference ID
+        showModal({
+          title: 'Admission Inquiry Registered',
+          content: `
+            <div class="text-center py-4">
+              <div style="font-size: 3rem; margin-bottom: 12px;">✅</div>
+              <h3 class="font-bold text-lg mb-2">Thank you, ${parentName}!</h3>
+              <p class="text-sm text-secondary mb-4">
+                Your admission inquiry has been logged in our central admissions system with Reference ID:
+              </p>
+              <div class="badge badge-primary" style="font-size: 1.15rem; padding: 8px 18px; font-weight: 700; letter-spacing: 0.05em; display: inline-block;">
+                ${inquiryId}
+              </div>
+              <div class="mt-4 p-4 rounded-md text-xs text-secondary" style="background: var(--bg-input); text-align: left; line-height: 1.8;">
+                <div><strong>Child Name:</strong> ${studentName || 'Not specified'}</div>
+                <div><strong>Applying For:</strong> ${grade}</div>
+                <div><strong>Contact Mobile:</strong> ${phone}</div>
+                <div><strong>Status:</strong> New (Assigned to Admissions Office)</div>
+              </div>
+              <div class="mt-5 flex gap-2 justify-center">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+                <button class="btn btn-success btn-sm" onclick="closeModal(); openWhatsAppModal();">
+                  ${icon('chat', 16)} Chat with Counselor on WhatsApp
+                </button>
+              </div>
+            </div>
+          `
+        });
+
+        inqForm.reset();
+      } catch (err) {
+        console.error('Inquiry submission error:', err);
+        showToast(err.message || 'Failed to submit inquiry. Please try again.', 'danger');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+      }
     };
   }
 }

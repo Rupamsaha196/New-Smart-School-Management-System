@@ -537,6 +537,43 @@ function showToast(message, type = 'info', duration = 3500) {
 }
 
 /* ==========================================================================
+   Global Interactive Modal Engine
+   ========================================================================== */
+window.closeModal = function() {
+  const modalRoot = document.getElementById('modal-root');
+  if (modalRoot) modalRoot.innerHTML = '';
+};
+
+window.showModal = function({ title, content, subtitle = '', size = 'md' }) {
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot) return;
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="app-dynamic-modal-backdrop" style="position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,0.65); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:16px;">
+      <div class="modal-dialog modal-${size}" style="background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-secondary); border-radius:var(--radius-lg); box-shadow:var(--shadow-xl); max-width:600px; width:100%; overflow:hidden; animation:scaleUp 0.18s cubic-bezier(0.16,1,0.3,1);">
+        <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:18px 24px; border-bottom:1px solid var(--border-secondary);">
+          <div>
+            <span class="modal-title" style="font-weight:700; font-size:1.1rem; color:var(--text-primary);">${title}</span>
+            ${subtitle ? `<div class="text-xs text-secondary mt-1">${subtitle}</div>` : ''}
+          </div>
+          <button class="modal-close" id="app-dynamic-modal-close-x" style="background:none; border:none; font-size:1.6rem; cursor:pointer; color:var(--text-secondary); line-height:1;" title="Close">&times;</button>
+        </div>
+        <div class="modal-body" style="padding:24px; max-height:75vh; overflow-y:auto;">
+          ${content}
+        </div>
+      </div>
+    </div>
+  `;
+  const closeBtn = document.getElementById('app-dynamic-modal-close-x');
+  if (closeBtn) closeBtn.onclick = window.closeModal;
+  const backdrop = document.getElementById('app-dynamic-modal-backdrop');
+  if (backdrop) {
+    backdrop.onclick = (e) => {
+      if (e.target === backdrop) window.closeModal();
+    };
+  }
+};
+
+/* ==========================================================================
    4. SVG Icons
    ========================================================================== */
 function icon(name, size = 20, className = '') {
@@ -573,6 +610,8 @@ function icon(name, size = 20, className = '') {
     arrowLeft: '<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />',
     arrowRight: '<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />',
     filter: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />',
+    clipboard: '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />',
+    chat: '<path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a.75.75 0 01-.861-.861c.148-.737.332-1.464.55-2.176C3.766 16.326 3 14.28 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />',
   };
 
   const path = icons[name] || icons.home;
@@ -841,6 +880,7 @@ const menuSections = [
     title: 'Main',
     items: [
       { label: 'Dashboard', path: '#/dashboard', icon: 'home', roles: ['super_admin', 'admin', 'teacher', 'accountant', 'receptionist', 'librarian', 'parent', 'student'] },
+      { label: 'Admission Inquiries', path: '#/students/inquiries', icon: 'clipboard', roles: ['super_admin', 'admin', 'receptionist'] },
       { label: 'Executive Reports', path: '#/reports', icon: 'chart', roles: ['super_admin', 'admin', 'accountant', 'teacher'] },
       { label: 'Front Website', path: '#/website', icon: 'home', roles: ['super_admin', 'admin', 'teacher', 'accountant', 'receptionist', 'librarian', 'parent', 'student'] },
     ],
@@ -849,6 +889,7 @@ const menuSections = [
     title: 'Academic',
     items: [
       { label: 'Students', path: '#/students', icon: 'users', roles: ['super_admin', 'admin', 'teacher', 'receptionist'] },
+      { label: 'Admission Inquiries', path: '#/students/inquiries', icon: 'clipboard', roles: ['super_admin', 'admin', 'receptionist'] },
       { label: 'Login Credentials', path: '#/students/credentials', icon: 'shield', roles: ['super_admin', 'admin', 'teacher'] },
       { label: 'New Admission', path: '#/students/admission', icon: 'userPlus', roles: ['super_admin', 'admin', 'receptionist'] },
       { label: 'Student Promotion', path: '#/academics/promotion', icon: 'academic', roles: ['super_admin', 'admin'] },
@@ -1638,9 +1679,19 @@ function _renderAdminDashboard(user, stats, localDailyAtt, errorBanner) {
     '<h1>Welcome, ' + (user?.name || 'Administrator') + '!</h1>' +
     '<p class="subtitle">Real-time school overview — all departments synced from live database</p>' +
     '</div><div class="flex gap-2">' +
+    '<a href="#/students/inquiries" class="btn btn-secondary" style="position:relative;">' + icon('clipboard', 18) + ' Inquiries ' + (stats?.new_inquiries > 0 ? ('<span class="badge badge-danger" style="font-size:0.7rem;padding:2px 6px;margin-left:4px;border-radius:10px;">' + stats.new_inquiries + ' New</span>') : '') + '</a>' +
     '<a href="#/students/admission" class="btn btn-primary">' + icon('userPlus', 18) + ' New Admission</a>' +
     '<a href="#/fees/collection" class="btn btn-secondary">' + icon('banknotes', 18) + ' Collect Fees</a>' +
     '</div></div>' + errorBanner +
+    (stats?.new_inquiries > 0 ? (
+      '<div class="card mb-4 animate-slideUp" style="background:linear-gradient(90deg, rgba(239,68,68,0.08), rgba(249,115,22,0.08));border:1px solid var(--danger-500);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius-md);flex-wrap:wrap;gap:10px;">' +
+      '<div class="flex items-center gap-3"><span style="font-size:1.4rem;">🔔</span><div>' +
+      '<div style="font-weight:700;font-size:0.95rem;color:var(--text-primary);">' + stats.new_inquiries + ' New Online Admission Inquir' + (stats.new_inquiries === 1 ? 'y' : 'ies') + ' Awaiting Follow-up</div>' +
+      '<div class="text-xs text-secondary mt-0.5">Submitted via Front Website portal. Prospective parents are awaiting admissions outreach.</div>' +
+      '</div></div>' +
+      '<a href="#/students/inquiries" class="btn btn-danger btn-sm" style="font-weight:700;">' + icon('clipboard', 16) + ' Review Inquiries Desk &rarr;</a>' +
+      '</div>'
+    ) : '') +
     '<div class="grid-stats mb-6">' +
     '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('users', 24) + '</div>' +
     '<div class="stat-value">' + totalStudents + '</div><div class="stat-label">Total Enrolled Students</div>' +
@@ -2086,9 +2137,19 @@ function _renderReceptionistDashboard(user, stats, localDailyAtt, errorBanner) {
     '<h1>Welcome, ' + (user?.name || 'Receptionist') + '!</h1>' +
     '<p class="subtitle">Front desk overview — admissions &amp; daily attendance snapshot</p>' +
     '</div><div class="flex gap-2">' +
+    '<a href="#/students/inquiries" class="btn btn-secondary" style="position:relative;">' + icon('clipboard', 18) + ' Inquiries ' + (stats?.new_inquiries > 0 ? ('<span class="badge badge-danger" style="font-size:0.7rem;padding:2px 6px;margin-left:4px;border-radius:10px;">' + stats.new_inquiries + ' New</span>') : '') + '</a>' +
     '<a href="#/students/admission" class="btn btn-primary">' + icon('userPlus', 18) + ' New Admission</a>' +
     '<a href="#/students" class="btn btn-secondary">' + icon('users', 18) + ' All Students</a>' +
     '</div></div>' + errorBanner +
+    (stats?.new_inquiries > 0 ? (
+      '<div class="card mb-4 animate-slideUp" style="background:linear-gradient(90deg, rgba(239,68,68,0.08), rgba(249,115,22,0.08));border:1px solid var(--danger-500);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius-md);flex-wrap:wrap;gap:10px;">' +
+      '<div class="flex items-center gap-3"><span style="font-size:1.4rem;">🔔</span><div>' +
+      '<div style="font-weight:700;font-size:0.95rem;color:var(--text-primary);">' + stats.new_inquiries + ' New Admission Inquiries at Reception Desk</div>' +
+      '<div class="text-xs text-secondary mt-0.5">Prospective students have submitted inquiries online.</div>' +
+      '</div></div>' +
+      '<a href="#/students/inquiries" class="btn btn-danger btn-sm" style="font-weight:700;">' + icon('clipboard', 16) + ' Open Inquiries Desk &rarr;</a>' +
+      '</div>'
+    ) : '') +
     '<div class="grid-stats mb-6">' +
     '<div class="stat-card stat-primary animate-slideUp"><div class="stat-icon">' + icon('users', 24) + '</div>' +
     '<div class="stat-value">' + totalStudents + '</div><div class="stat-label">Total Enrolled Students</div>' +
@@ -2346,27 +2407,42 @@ async function renderAdmission() {
     }
   }
 
-  // Prepopulate if editing existing student; otherwise leave completely blank for fresh input
-  const sFirstName    = student ? (student.first_name || (student.name ? student.name.split(' ')[0] : '')) : '';
-  const sLastName     = student ? (student.last_name || (student.name ? student.name.split(' ').slice(1).join(' ') : '')) : '';
+  // Prepopulate if editing existing student or converting an inquiry
+  let convertedInquiry = null;
+  const rawPendingInq = sessionStorage.getItem('pending_admission_inquiry');
+  if (rawPendingInq && !isEdit) {
+    try {
+      convertedInquiry = JSON.parse(rawPendingInq);
+      sessionStorage.removeItem('pending_admission_inquiry');
+    } catch {}
+  }
+
+  let convertedClassId = 1;
+  if (convertedInquiry?.grade) {
+    const numMatch = convertedInquiry.grade.match(/\d+/);
+    if (numMatch) convertedClassId = parseInt(numMatch[0], 10);
+  }
+
+  const sFirstName    = student ? (student.first_name || (student.name ? student.name.split(' ')[0] : '')) : (convertedInquiry?.studentName ? convertedInquiry.studentName.split(' ')[0] : '');
+  const sLastName     = student ? (student.last_name || (student.name ? student.name.split(' ').slice(1).join(' ') : '')) : (convertedInquiry?.studentName ? convertedInquiry.studentName.split(' ').slice(1).join(' ') : '');
   const sDob          = student ? (student.dob || student.date_of_birth || '') : '';
   const sGender       = student ? (student.gender || 'Male') : 'Male';
   const sCategory     = student ? (student.category || 'General') : 'General';
   const sNationalId   = student ? (student.caste || student.national_id || student.aadhaar_no || '') : '';
   const sRteQuota     = student ? (student.rte == 1 || student.rte === '1' || student.rte === 'Yes' || student.rte === true) : false;
   const sRteRegNo     = student ? (student.rte_reg_no || '') : '';
-  const sClassId      = student ? (parseInt(String(student.class_id || 1).replace(/\D+/g, ''), 10) || 1) : 1;
+  const sClassId      = student ? (parseInt(String(student.class_id || 1).replace(/\D+/g, ''), 10) || 1) : convertedClassId;
   const sSection      = student ? (student.section_id || student.section || 'A') : 'A';
   const sRollNo       = student ? (student.roll_no || '') : '';
-  const sEmail        = student ? (student.email || '') : '';
-  const sPhone        = student ? (student.phone || '') : '';
+  const sEmail        = student ? (student.email || '') : (convertedInquiry?.email || '');
+  const sPhone        = student ? (student.phone || '') : (convertedInquiry?.phone || '');
   const sAltPhone     = student ? (student.guardian_phone || student.alt_phone || '') : '';
   const sAddress      = student ? (student.address || '') : '';
   const sPrevSchool   = student ? (student.previous_school || student.prev_school || '') : '';
   const sPrevTcNo     = student ? (student.previous_class || student.prev_tc_no || '') : '';
   const sPrevScore    = student ? (student.prev_score || '') : '';
-  const sFatherName   = student ? (student.father_name || '') : '';
-  const sFatherPhone  = student ? (student.father_phone || '') : '';
+  const sFatherName   = student ? (student.father_name || '') : (convertedInquiry?.parentName || '');
+  const sFatherPhone  = student ? (student.father_phone || '') : (convertedInquiry?.phone || '');
   const sFatherOcc    = student ? (student.father_occupation || '') : '';
   const sMotherName   = student ? (student.mother_name || '') : '';
   const sMotherPhone  = student ? (student.mother_phone || '') : '';
@@ -3602,6 +3678,8 @@ async function handleRouting() {
     '#/attendance/mark': ['super_admin', 'admin', 'teacher'],
     '#/exams/marks': ['super_admin', 'admin', 'teacher'],
     '#/students/admission': ['super_admin', 'admin', 'receptionist'],
+    '#/students/inquiries': ['super_admin', 'admin', 'receptionist'],
+    '#/inquiries': ['super_admin', 'admin', 'receptionist'],
     '#/admissions/online': ['super_admin', 'admin', 'receptionist'],
     '#/online-admission': ['super_admin', 'admin', 'receptionist'],
     '#/academics/promotion': ['super_admin', 'admin'],
@@ -3640,7 +3718,10 @@ async function handleRouting() {
   } else if (routePath === '#/students/credentials' || routePath === '#/students/login-credentials') {
     contentHtml = await renderStudentCredentials();
     bindViewEvents = bindStudentCredentialsEvents;
-  } else if (routePath.startsWith('#/students/') && routePath !== '#/students/tc' && routePath !== '#/students/behavior' && routePath !== '#/students/credentials' && routePath !== '#/students/login-credentials') {
+  } else if (routePath === '#/students/inquiries' || routePath === '#/inquiries' || routePath === '#/website/inquiries') {
+    contentHtml = await renderAdmissionInquiries();
+    bindViewEvents = bindAdmissionInquiriesEvents;
+  } else if (routePath.startsWith('#/students/') && routePath !== '#/students/tc' && routePath !== '#/students/behavior' && routePath !== '#/students/credentials' && routePath !== '#/students/login-credentials' && routePath !== '#/students/inquiries') {
     const id = routePath.replace('#/students/', '');
     contentHtml = await renderStudentProfile({ id });
   } else if (routePath === '#/students/tc') {
