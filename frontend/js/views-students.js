@@ -638,75 +638,105 @@ function bindTransferCertificateEvents() {
 }
 
 /* ==========================================================================
-   Student Behavior & Discipline Records View
+   Student Behavior & Discipline Records View (Module 30 & Behavior Reports)
    ========================================================================== */
-let behaviorLogs = [
-  { id: 1, student: 'Aarav Sharma', class: 'Class 5-A', type: 'Commendation', title: 'Science Fair 1st Prize Winner', points: '+15', date: '2026-09-22', status: 'positive' },
-  { id: 2, student: 'Rohan Patel', class: 'Class 10-A', type: 'Minor Infraction', title: 'Late arrival to morning assembly', points: '-2', date: '2026-09-24', status: 'warning' },
-  { id: 3, student: 'Priya Singh', class: 'Class 8-B', type: 'Leadership', title: 'Elected House Captain', points: '+20', date: '2026-09-18', status: 'positive' },
-  { id: 4, student: 'Vikram Reddy', class: 'Class 12-A', type: 'Uniform Violation', title: 'Incomplete formal uniform', points: '-5', date: '2026-09-25', status: 'danger' },
-];
+let behaviorLiveRecords = [];
+let behaviorLiveStats = { total_records: 0, total_merits: 0, total_demerits: 0, discipline_index: 100 };
 
 async function renderBehaviorRecords() {
+  try {
+    const res = await api.get('/reports/behavior');
+    if (res && res.data) {
+      behaviorLiveRecords = res.data.records || [];
+      behaviorLiveStats = {
+        total_records: res.data.total_records || behaviorLiveRecords.length,
+        total_merits: res.data.total_merits || 0,
+        total_demerits: res.data.total_demerits || 0,
+        discipline_index: res.data.discipline_index !== undefined ? res.data.discipline_index : 100,
+      };
+    }
+  } catch (err) {
+    console.warn('[Behavior] Fallback to existing logs:', err);
+  }
+
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
         <div>
           <h1>Student Behavior & Commendations</h1>
-          <p class="subtitle">Track holistic conduct, disciplinary logs, and extracurricular achievements</p>
+          <p class="subtitle">Track live student conduct, merit commendations, disciplinary logs, and download verified CSV reports</p>
         </div>
-        <button class="btn btn-primary" id="add-behavior-btn">
-          ${icon('plus', 18)} Record Incident / Merit
-        </button>
+        <div class="flex gap-2">
+          <button class="btn btn-secondary" id="export-behavior-csv-btn">
+            ${icon('download', 18)} Export Behavior CSV
+          </button>
+          <button class="btn btn-primary" id="add-behavior-btn">
+            ${icon('plus', 18)} Record Incident / Merit
+          </button>
+        </div>
       </div>
 
       <div class="grid-3 mb-6">
         <div class="stat-card stat-success">
           <div class="stat-icon">${icon('checkCircle', 24)}</div>
-          <div class="stat-value">142</div>
-          <div class="stat-label">Positive Commendations This Term</div>
+          <div class="stat-value" id="stat-merits">${behaviorLiveStats.total_merits}</div>
+          <div class="stat-label">Positive Commendations & Merits (Database)</div>
         </div>
         <div class="stat-card stat-warning">
           <div class="stat-icon">${icon('shield', 24)}</div>
-          <div class="stat-value">18</div>
-          <div class="stat-label">Minor Infractions</div>
+          <div class="stat-value" id="stat-demerits">${behaviorLiveStats.total_demerits}</div>
+          <div class="stat-label">Disciplinary Infractions Logged</div>
         </div>
         <div class="stat-card stat-primary">
           <div class="stat-icon">${icon('academic', 24)}</div>
-          <div class="stat-value">98.2%</div>
-          <div class="stat-label">Overall School Discipline Index</div>
+          <div class="stat-value" id="stat-discipline">${behaviorLiveStats.discipline_index}%</div>
+          <div class="stat-label">Real School Discipline Compliance Index</div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-header">
-          <span class="card-title">Recent Behavior Logs</span>
+        <div class="card-header flex justify-between items-center">
+          <div>
+            <span class="card-title">Live Behavioral Incidents & Commendation Register</span>
+            <div class="text-xs text-secondary mt-1">Directly recorded in MySQL database across all student cohorts</div>
+          </div>
+          <div class="text-xs text-secondary font-semibold">
+            ${behaviorLiveRecords.length} Total Verified Incidents
+          </div>
         </div>
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Class</th>
-              <th>Category</th>
-              <th>Incident / Commendation</th>
-              <th>House Points</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody id="behavior-tbody">
-            ${renderBehaviorRows(behaviorLogs)}
-          </tbody>
-        </table>
+        <div style="overflow-x: auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Adm No</th>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Classification</th>
+                <th>Incident / Commendation Title</th>
+                <th>House Points</th>
+                <th>Date</th>
+                <th>Logged By</th>
+              </tr>
+            </thead>
+            <tbody id="behavior-tbody">
+              ${renderBehaviorRows(behaviorLiveRecords)}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   `;
 }
 
 function renderBehaviorRows(items) {
+  if (!items || items.length === 0) {
+    return `<tr><td colspan="8" class="text-center p-8 text-secondary">No behavioral records logged in database.</td></tr>`;
+  }
   return items.map(b => `
     <tr>
-      <td><strong>${b.student}</strong></td>
-      <td>${b.class}</td>
+      <td><code>${b.admission_no || 'SS-GEN'}</code></td>
+      <td><strong>${b.student_name || b.student || 'Student'}</strong></td>
+      <td>${b.class_name || b.class || 'Class 10'} (${b.section || 'A'})</td>
       <td>
         <span class="badge ${b.status === 'positive' ? 'badge-success' : b.status === 'warning' ? 'badge-warning' : 'badge-danger'}">
           ${b.type}
@@ -715,18 +745,54 @@ function renderBehaviorRows(items) {
       <td>${b.title}</td>
       <td><strong style="color: ${b.status === 'positive' ? 'var(--success-600)' : 'var(--danger-500)'};">${b.points}</strong></td>
       <td class="text-secondary">${b.date}</td>
+      <td class="text-secondary text-xs">${b.logged_by || 'Faculty'}</td>
     </tr>
   `).join('');
 }
 
 function bindBehaviorRecordsEvents() {
+  // Export Behavior CSV
+  const exportBtn = document.getElementById('export-behavior-csv-btn');
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      const headers = [
+        'Log ID',
+        'Incident Date',
+        'Admission No',
+        'Student Full Name',
+        'Class',
+        'Section',
+        'Classification',
+        'Incident / Commendation Title',
+        'House Points',
+        'Logged By Faculty'
+      ];
+
+      const rows = behaviorLiveRecords.map(b => [
+        b.id,
+        b.date,
+        b.admission_no || '',
+        b.student_name || b.student || '',
+        b.class_name || b.class || '',
+        b.section || 'A',
+        b.type,
+        b.title,
+        b.points,
+        b.logged_by || 'Faculty'
+      ]);
+
+      window.downloadCsvReport('SmartSchool_Student_Behavior_Log', headers, rows);
+    };
+  }
+
+  // Record Incident / Merit modal
   const addBtn = document.getElementById('add-behavior-btn');
   if (addBtn) {
     addBtn.onclick = () => {
       window.openAppModal({
         title: 'Log Student Behavioral Observation',
-        subtitle: 'Record an achievement citation, leadership merit, or disciplinary infraction',
-        saveLabel: 'Log Record',
+        subtitle: 'Record an achievement citation, leadership merit, or disciplinary infraction to the MySQL database',
+        saveLabel: 'Log to Database',
         saveIcon: 'plus',
         contentHtml: `
           <div class="form-grid">
@@ -762,23 +828,45 @@ function bindBehaviorRecordsEvents() {
           }
           const cls = document.getElementById('modal-bh-class').value.trim() || 'Class 10';
           const type = document.getElementById('modal-bh-type').value;
-          const isPositive = type.includes('Merit') || type.includes('Leadership');
 
-          behaviorLogs.unshift({
-            id: Date.now(),
-            student,
-            class: cls,
-            type: isPositive ? 'Commendation' : 'Disciplinary Infraction',
-            title,
-            points: isPositive ? '+10' : '-5',
-            date: new Date().toISOString().split('T')[0],
-            status: isPositive ? 'positive' : 'warning',
-          });
+          try {
+            // Save to MySQL database via backend API
+            const saveRes = await api.post('/behavior/store', {
+              student_name: student,
+              class: cls,
+              type: type,
+              title: title,
+              note: title,
+            });
 
-          const tbody = document.getElementById('behavior-tbody');
-          if (tbody) tbody.innerHTML = renderBehaviorRows(behaviorLogs);
-          if (window.showToast) window.showToast('Behavior record successfully logged', 'success');
-          return true;
+            // Re-fetch updated records from database
+            const refRes = await api.get('/reports/behavior');
+            if (refRes && refRes.data) {
+              behaviorLiveRecords = refRes.data.records || [];
+              behaviorLiveStats = {
+                total_records: refRes.data.total_records || behaviorLiveRecords.length,
+                total_merits: refRes.data.total_merits || 0,
+                total_demerits: refRes.data.total_demerits || 0,
+                discipline_index: refRes.data.discipline_index !== undefined ? refRes.data.discipline_index : 100,
+              };
+
+              const mEl = document.getElementById('stat-merits');
+              if (mEl) mEl.textContent = behaviorLiveStats.total_merits;
+              const dEl = document.getElementById('stat-demerits');
+              if (dEl) dEl.textContent = behaviorLiveStats.total_demerits;
+              const diEl = document.getElementById('stat-discipline');
+              if (diEl) diEl.textContent = `${behaviorLiveStats.discipline_index}%`;
+            }
+
+            const tbody = document.getElementById('behavior-tbody');
+            if (tbody) tbody.innerHTML = renderBehaviorRows(behaviorLiveRecords);
+            if (window.showToast) window.showToast('Behavior observation successfully saved to database!', 'success');
+            return true;
+          } catch (saveErr) {
+            console.error('Error saving behavior record:', saveErr);
+            if (window.showToast) window.showToast('Failed to save behavior record: ' + saveErr.message, 'danger');
+            return false;
+          }
         }
       });
     };

@@ -127,8 +127,17 @@ $route['api/notices/store']                 = 'operations/store_notice';
 $route['api/calendar-events']               = 'operations/calendar_events';
 $route['api/calendar-events/(:num)']        = 'operations/destroy_calendar_event/$1';
 
-// ── Reports ──────────────────────────────────────────────────────────
+// ── Reports & Analytics ────────────────────────────────────────────────
 $route['api/reports']                       = 'reports/index';
+$route['api/reports/students']              = 'reports/student';
+$route['api/reports/finance']               = 'reports/finance';
+$route['api/reports/attendance']            = 'reports/attendance';
+$route['api/reports/exams']                 = 'reports/exams';
+$route['api/reports/behavior']              = 'reports/behavior';
+$route['api/behavior']                      = 'reports/behavior';
+$route['api/behavior/store']                = 'reports/store_behavior';
+$route['api/students/behavior']             = 'reports/behavior';
+$route['api/students/behavior/store']       = 'reports/store_behavior';
 
 // ── Settings & Backup ──────────────────────────────────────────────────
 $route['api/settings']                      = 'settings/index';
