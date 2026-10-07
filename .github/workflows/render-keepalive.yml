@@ -1,0 +1,32 @@
+name: Render Free Tier 24/7 Keep-Alive
+
+on:
+  schedule:
+    # Trigger every 10 minutes to stay ahead of Render's 15-minute idle sleep policy
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+
+jobs:
+  keep-alive:
+    name: Ping Render Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Stay-Awake Heartbeat
+        run: |
+          RENDER_URL="${{ secrets.RENDER_APP_URL }}"
+          if [ -z "$RENDER_URL" ]; then
+            # Fallback placeholder if secret is not yet set
+            RENDER_URL="https://smart-school-infosof.onrender.com"
+          fi
+          HEALTH_URL="${RENDER_URL%/}/health"
+          echo "Pinging health endpoint: $HEALTH_URL"
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 45 "$HEALTH_URL" || true)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP Status Code: $HTTP_CODE"
+          echo "Response Body: $BODY"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Server is ACTIVE and healthy."
+          else
+            echo "⚠️ Server woke up or responded with non-200. Signal transmitted successfully."
+          fi

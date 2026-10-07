@@ -162,18 +162,30 @@ After migration is complete, log into Smart School using any of the seeded accou
 
 ---
 
-## 7. Free-Tier Keep-Alive Configuration (24/7 Uptime)
+## 7. Free-Tier Keep-Alive & Auto-Waker System (No UptimeRobot Required)
 
-Render's free web services automatically spin down ("sleep") after **15 minutes of inactivity**. The next request can take 30–50 seconds to spin up.
+Render's free web services automatically spin down ("sleep") after **15 minutes of inactivity**.
 
-To keep your free Smart School service warm 24/7 with zero downtime:
+The project now includes **3 built-in solutions** to stay awake and auto-start without third-party services like UptimeRobot:
 
-1. Create a free account at **[Cron-job.org](https://cron-job.org)** or **[UptimeRobot](https://uptimerobot.com/)**.
-2. Create a new monitor/cron job:
-   - **URL:** `https://your-service-name.onrender.com/health`
-   - **Schedule / Interval:** Every **10 minutes**
-   - **HTTP Method:** `GET`
-3. Save the monitor. This lightweight health check will keep your instance permanently awake at 0 cost!
+### Method A: Client-Side Auto-Keep-Alive & Wake-Up Engine (Built-In Browser JS)
+- **Automatic Heartbeat:** When any user has the web app open, `frontend/js/keepalive.js` sends an unthrottled Web Worker heartbeat every **8 minutes** to `/health`.
+- **Background Tab Safe:** Uses an inline Web Worker so browser timers are never throttled or frozen when tabs are minimized.
+- **Cold-Start Auto-Waker & Auto-Retry:** If the service is already sleeping when visited, a modern floating overlay appears: *"⚡ Cloud Server Starting Up..."*. It polls `/health` every 3.5s and automatically completes pending API requests as soon as Render spins up (~30s), requiring zero page refreshes from the user.
+- **Multi-Tab Sync:** Uses `localStorage` and `BroadcastChannel` so multiple tabs coordinate and only 1 tab pings.
+
+### Method B: Free GitHub Actions 24/7 Keep-Alive Workflow (Zero Maintenance)
+A ready-to-use GitHub Actions workflow is included at [`.github/workflows/render-keepalive.yml`](.github/workflows/render-keepalive.yml):
+1. In your GitHub repository, go to **Settings > Secrets and variables > Actions**.
+2. Add a Repository Secret:
+   - `RENDER_APP_URL`: `https://your-service-name.onrender.com`
+3. GitHub will automatically ping your `/health` endpoint every **10 minutes** for free 24/7, keeping it permanently awake even when no browser tabs are open!
+
+### Method C: Standalone Node.js Runner (`keepalive-runner.js`)
+Run locally or on any server/VPS:
+```bash
+node keepalive-runner.js https://your-service-name.onrender.com 10
+```
 
 ---
 

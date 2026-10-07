@@ -82,6 +82,13 @@ window.addEventListener('attendanceUpdated', () => {
   }
 });
 
+window.addEventListener('render:woke_up', () => {
+  console.log('⚡ Render instance woke up! Refreshing view data...');
+  if (typeof handleRouting === 'function') {
+    handleRouting();
+  }
+});
+
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');
   const headers = {
@@ -104,21 +111,45 @@ async function request(endpoint, options = {}) {
   try {
     response = await fetch(url, { ...options, headers });
   } catch (err) {
-    // If localhost failed (e.g. Windows IPv6 vs IPv4 binding), retry with fallback host
-    let fallbackUrl = null;
-    if (url.includes('localhost:8000')) {
-      fallbackUrl = url.replace('localhost:8000', '127.0.0.1:8000');
-    } else if (url.includes('127.0.0.1:8000')) {
-      fallbackUrl = url.replace('127.0.0.1:8000', 'localhost:8000');
-    }
-    if (fallbackUrl) {
+    // Check if Render free tier is sleeping or waking up
+    if (window.RenderKeepAlive && typeof window.RenderKeepAlive.waitForWakeUp === 'function') {
       try {
-        response = await fetch(fallbackUrl, { ...options, headers });
-      } catch (e2) {
-        throw new Error('Network error: Unable to connect to backend server on port 8000');
+        const wokeUp = await window.RenderKeepAlive.waitForWakeUp();
+        if (wokeUp) {
+          response = await fetch(url, { ...options, headers });
+        }
+      } catch (wakeErr) {
+        console.warn('[KeepAlive] Auto-wake retry failed:', wakeErr);
       }
-    } else {
-      throw new Error('Network error: Unable to connect to backend server');
+    }
+
+    if (!response) {
+      // If localhost failed (e.g. Windows IPv6 vs IPv4 binding), retry with fallback host
+      let fallbackUrl = null;
+      if (url.includes('localhost:8000')) {
+        fallbackUrl = url.replace('localhost:8000', '127.0.0.1:8000');
+      } else if (url.includes('127.0.0.1:8000')) {
+        fallbackUrl = url.replace('127.0.0.1:8000', 'localhost:8000');
+      }
+      if (fallbackUrl) {
+        try {
+          response = await fetch(fallbackUrl, { ...options, headers });
+        } catch (e2) {
+          throw new Error('Network error: Unable to connect to backend server on port 8000');
+        }
+      } else {
+        throw new Error('Network error: Unable to connect to backend server');
+      }
+    }
+  }
+
+  // Handle Render cold start 502/503/504 Bad Gateway
+  if (response && (response.status === 502 || response.status === 503 || response.status === 504)) {
+    if (window.RenderKeepAlive && typeof window.RenderKeepAlive.waitForWakeUp === 'function') {
+      const wokeUp = await window.RenderKeepAlive.waitForWakeUp();
+      if (wokeUp) {
+        response = await fetch(url, { ...options, headers });
+      }
     }
   }
 
