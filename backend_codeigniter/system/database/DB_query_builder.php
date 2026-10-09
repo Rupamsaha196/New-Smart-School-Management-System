@@ -71,8 +71,27 @@ class CI_DB_query_builder {
         return $this;
     }
 
+    public function escape_table(string $table): string {
+        $table = trim($table);
+        if ($table === '') {
+            return '';
+        }
+        if (strpos($table, ',') !== false) {
+            $parts = array_map([$this, 'escape_table'], explode(',', $table));
+            return implode(', ', $parts);
+        }
+        if (preg_match('/^`?([a-zA-Z0-9_]+)`?\s+(?:AS\s+)?`?([a-zA-Z0-9_]+)`?$/i', $table, $m)) {
+            return "`{$m[1]}` AS `{$m[2]}`";
+        }
+        if (preg_match('/^`?([a-zA-Z0-9_]+)`?$/', $table, $m)) {
+            return "`{$m[1]}`";
+        }
+        return $table;
+    }
+
     public function join(string $table, string $cond, string $type = 'INNER'): self {
-        $this->joins[] = strtoupper($type) . " JOIN `{$table}` ON {$cond}";
+        $escaped_table = $this->escape_table($table);
+        $this->joins[] = strtoupper($type) . " JOIN {$escaped_table} ON {$cond}";
         return $this;
     }
 
@@ -260,7 +279,8 @@ class CI_DB_query_builder {
             $this->limit($limit, $offset);
         }
 
-        $sql = "SELECT {$this->select_clause} FROM `{$this->from_table}`";
+        $escaped_table = $this->escape_table($this->from_table);
+        $sql = "SELECT {$this->select_clause} FROM {$escaped_table}";
 
         if (!empty($this->joins)) {
             $sql .= " " . implode(" ", $this->joins);
@@ -296,11 +316,12 @@ class CI_DB_query_builder {
     }
 
     public function insert(string $table, array $data): bool {
+        $escaped_table = $this->escape_table($table);
         $keys = array_keys($data);
         $fields = implode('`, `', $keys);
         $placeholders = ':' . implode(', :', $keys);
 
-        $sql = "INSERT INTO `{$table}` (`{$fields}`) VALUES ({$placeholders})";
+        $sql = "INSERT INTO {$escaped_table} (`{$fields}`) VALUES ({$placeholders})";
 
         $binds = [];
         foreach ($data as $k => $v) {
@@ -324,6 +345,7 @@ class CI_DB_query_builder {
             $this->where($where);
         }
 
+        $escaped_table = $this->escape_table($table);
         $set_parts = [];
         $binds = [];
         foreach ($data as $k => $v) {
@@ -332,7 +354,7 @@ class CI_DB_query_builder {
             $binds[$param] = is_array($v) ? json_encode($v) : $v;
         }
 
-        $sql = "UPDATE `{$table}` SET " . implode(', ', $set_parts);
+        $sql = "UPDATE {$escaped_table} SET " . implode(', ', $set_parts);
 
         if (!empty($this->where_clauses)) {
             $sql .= " WHERE " . implode(' ', $this->where_clauses);
@@ -352,7 +374,8 @@ class CI_DB_query_builder {
             $this->where($where);
         }
 
-        $sql = "DELETE FROM `{$table}`";
+        $escaped_table = $this->escape_table($table);
+        $sql = "DELETE FROM {$escaped_table}";
         if (!empty($this->where_clauses)) {
             $sql .= " WHERE " . implode(' ', $this->where_clauses);
         }
@@ -369,7 +392,11 @@ class CI_DB_query_builder {
         if ($table !== NULL) {
             $this->from_table = $table;
         }
-        $sql = "SELECT COUNT(*) as cnt FROM `{$this->from_table}`";
+        $escaped_table = $this->escape_table($this->from_table);
+        $sql = "SELECT COUNT(*) as cnt FROM {$escaped_table}";
+        if (!empty($this->joins)) {
+            $sql .= " " . implode(" ", $this->joins);
+        }
         if (!empty($this->where_clauses)) {
             $sql .= " WHERE " . implode(' ', $this->where_clauses);
         }

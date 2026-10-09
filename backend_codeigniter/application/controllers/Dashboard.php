@@ -73,7 +73,7 @@ class Dashboard extends REST_Controller {
         $this->apply_campus_filter('', $campus);
         $total_teachers = (int)$this->db->where('role', 'Teacher')->count_all_results('staff');
 
-        $total_parents  = (int)$this->db->where('role', 'parent')->count_all_results('users');
+        $total_parents  = $this->is_main_campus($campus) ? (int)$this->db->where('role', 'parent')->count_all_results('users') : 0;
 
         // 2. Fees Analytics from DB
         $this->apply_campus_filter('', $campus);
