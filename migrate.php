@@ -203,10 +203,41 @@ echo " Execution Summary:\n";
 echo " Statements Executed : {$executed} / {$total}\n";
 echo " Warnings / Skipped  : {$errors}\n";
 
-// 5. Verify Table Count
-$stmt = $pdo->query("SHOW TABLES;");
-$tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
-echo " Total Tables Created: " . count($tables) . " tables in database '{$database}'\n";
+// 6. Multi-Campus Schema & Data Scoping Synchronization
+echo "\nSynchronizing multi-campus scoping schema...\n";
+$main_campus = 'Kolkata Main Campus (Salt Lake Sector V)';
+$campus_tables = [
+    'admission_inquiries', 'attendances', 'calendar_events', 'custom_fields',
+    'download_materials', 'exams', 'fee_discounts', 'fee_types',
+    'homeworks', 'hostels', 'library_books', 'live_classes',
+    'notices', 'school_classes', 'staff', 'student_fees',
+    'students', 'timetables', 'transactions', 'transport_routes'
+];
+
+$columns_added = 0;
+$records_scoped = 0;
+
+foreach ($campus_tables as $tbl) {
+    try {
+        $cols = $pdo->query("SHOW COLUMNS FROM `{$tbl}` LIKE 'campus'")->fetchAll();
+        if (empty($cols)) {
+            $pdo->exec("ALTER TABLE `{$tbl}` ADD COLUMN `campus` VARCHAR(255) NULL DEFAULT '{$main_campus}'");
+            $columns_added++;
+            echo " [+] Added 'campus' column to `{$tbl}`\n";
+            try {
+                $pdo->exec("CREATE INDEX `idx_{$tbl}_campus` ON `{$tbl}` (`campus`)");
+            } catch (Throwable $e) {}
+        }
+        $affected = $pdo->exec("UPDATE `{$tbl}` SET `campus` = '{$main_campus}' WHERE `campus` IS NULL OR `campus` = ''");
+        if ($affected > 0) {
+            $records_scoped += $affected;
+            echo " [✓] Assigned {$affected} records to '{$main_campus}' in `{$tbl}`\n";
+        }
+    } catch (Throwable $e) {
+        // Table may not exist in this environment yet
+    }
+}
+echo " Multi-Campus Scoping Sync Complete: {$columns_added} columns added, {$records_scoped} rows scoped to Kolkata Main.\n";
 echo "========================================================================\n\n";
 
 echo "Database migration completed successfully!\n";

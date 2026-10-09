@@ -81,12 +81,64 @@ class REST_Controller extends CI_Controller {
         return (strpos($c, 'kolkata main') !== false || strpos($c, 'salt lake') !== false || $c === 'main' || $c === 'main campus');
     }
 
+    protected static bool $campus_schema_synced = false;
+
+    /**
+     * Self-healing runtime schema sync for multi-campus deployments (Render / Cloud / Local)
+     * Ensures all 20 core entity tables have the `campus` column and existing data is assigned to Kolkata Main.
+     */
+    public function ensure_campus_schema(): void {
+        if (self::$campus_schema_synced) {
+            return;
+        }
+        self::$campus_schema_synced = true;
+
+        $lock_file = APPPATH . 'cache/campus_schema_v2.lock';
+        if (file_exists($lock_file)) {
+            return;
+        }
+
+        try {
+            $main_campus = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $tables = [
+                'admission_inquiries', 'attendances', 'calendar_events', 'custom_fields',
+                'download_materials', 'exams', 'fee_discounts', 'fee_types',
+                'homeworks', 'hostels', 'library_books', 'live_classes',
+                'notices', 'school_classes', 'staff', 'student_fees',
+                'students', 'timetables', 'transactions', 'transport_routes'
+            ];
+
+            // Fast check on students table
+            $check = $this->db->query("SHOW COLUMNS FROM `students` LIKE 'campus'")->row_array();
+            if ($check) {
+                @touch($lock_file);
+                return;
+            }
+
+            foreach ($tables as $tbl) {
+                try {
+                    $has = $this->db->query("SHOW COLUMNS FROM `{$tbl}` LIKE 'campus'")->row_array();
+                    if (!$has) {
+                        $this->db->query("ALTER TABLE `{$tbl}` ADD COLUMN `campus` VARCHAR(255) NULL DEFAULT '{$main_campus}'");
+                        try {
+                            $this->db->query("CREATE INDEX `idx_{$tbl}_campus` ON `{$tbl}` (`campus`)");
+                        } catch (\Throwable $e) {}
+                    }
+                    $this->db->query("UPDATE `{$tbl}` SET `campus` = '{$main_campus}' WHERE `campus` IS NULL OR `campus` = ''");
+                } catch (\Throwable $e) {}
+            }
+
+            @touch($lock_file);
+        } catch (\Throwable $e) {}
+    }
+
     /**
      * Apply multi-campus isolation to CodeIgniter QueryBuilder
      * If Kolkata Main: matches explicit Kolkata Main records, NULL, or empty records
      * If other institution: strictly isolates to that campus (returns 0 records if none entered yet)
      */
     public function apply_campus_filter(string $table_alias = '', ?string $campus = null): void {
+        $this->ensure_campus_schema();
         $campus = $campus ?? $this->get_active_campus();
         $col = !empty($table_alias) ? "{$table_alias}.campus" : "campus";
         $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
