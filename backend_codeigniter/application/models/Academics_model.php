@@ -3,10 +3,27 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Academics_model extends CI_Model {
 
-    public function get_classes(): array {
+    public function get_classes(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         $classes = $this->db->order_by('id', 'ASC')->get('school_classes')->result_array();
         foreach ($classes as &$c) {
-            $c['students_count'] = $this->db->where('class_id', $c['id'])->count_all_results('students');
+            $this->db->where('class_id', $c['id']);
+            if ($campus !== null) {
+                if ($is_main) {
+                    $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus IS NULL OR campus = '')", null, false);
+                } else {
+                    $this->db->where('campus', $campus);
+                }
+            }
+            $c['students_count'] = $this->db->count_all_results('students');
             $c['section'] = $c['sections'] ?? 'A, B';
         }
         return $classes;

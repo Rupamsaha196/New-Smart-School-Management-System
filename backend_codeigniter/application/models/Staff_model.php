@@ -3,7 +3,16 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Staff_model extends CI_Model {
 
-    public function get_all(): array {
+    public function get_all(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         return $this->db->get('staff')->result_array();
     }
 
@@ -29,7 +38,7 @@ class Staff_model extends CI_Model {
         }
 
         $allowed = [
-            'emp_id', 'name', 'role', 'designation', 'email', 'phone', 'dob',
+            'campus', 'emp_id', 'name', 'role', 'designation', 'email', 'phone', 'dob',
             'gender', 'blood_group', 'religion', 'category', 'joining_date',
             'address', 'city', 'state', 'pincode', 'qualification', 'basic_salary',
             'account_no', 'bank_name', 'ifsc_code', 'profile_photo', 'department', 'status'

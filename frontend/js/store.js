@@ -25,6 +25,20 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
   return role === String(allowedRoles).toLowerCase();
 };
 
+window.getActiveCampus = function () {
+  const c = localStorage.getItem('active_campus');
+  if (c && c.trim() && !c.includes('Delhi')) {
+    return c.trim();
+  }
+  return 'Kolkata Main Campus (Salt Lake Sector V)';
+};
+
+window.isMainCampus = function (campus) {
+  if (!campus) return true;
+  const c = String(campus).toLowerCase().trim();
+  return c.includes('kolkata main') || c.includes('salt lake') || c === 'main';
+};
+
 (function () {
   const STORAGE_KEY = 'smart_school_store_v2026';
 
@@ -200,19 +214,39 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
           if (parsed && parsed.routes && parsed.routes[0] && String(parsed.routes[0].vehicle_no).includes('DL-')) {
             parsed.routes = defaultData.routes;
             parsed.hostels = defaultData.hostels;
-            this.save({ ...defaultData, ...parsed });
           }
           if (!parsed.hostel_allocations || !Array.isArray(parsed.hostel_allocations) || parsed.hostel_allocations.length === 0) {
             parsed.hostel_allocations = defaultData.hostel_allocations;
-            this.save({ ...defaultData, ...parsed });
           }
-          return { ...defaultData, ...parsed };
+          const merged = { ...defaultData, ...parsed };
+          // Ensure all pre-existing records belong exclusively to Kolkata Main Campus
+          Object.keys(merged).forEach((col) => {
+            if (Array.isArray(merged[col])) {
+              merged[col].forEach((item) => {
+                if (!item.campus) {
+                  item.campus = 'Kolkata Main Campus (Salt Lake Sector V)';
+                }
+              });
+            }
+          });
+          this.save(merged);
+          return merged;
         }
       } catch (e) {
         console.warn('Store load failed, using defaults', e);
       }
-      this.save(defaultData);
-      return JSON.parse(JSON.stringify(defaultData));
+      const initial = JSON.parse(JSON.stringify(defaultData));
+      Object.keys(initial).forEach((col) => {
+        if (Array.isArray(initial[col])) {
+          initial[col].forEach((item) => {
+            if (!item.campus) {
+              item.campus = 'Kolkata Main Campus (Salt Lake Sector V)';
+            }
+          });
+        }
+      });
+      this.save(initial);
+      return initial;
     }
 
     save(customData = null) {
@@ -225,12 +259,31 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
       }
     }
 
-    get(collection) {
+    get(collection, campus = null) {
+      const activeCampus = campus || (typeof window.getActiveCampus === 'function' ? window.getActiveCampus() : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)'));
+      const isMain = typeof window.isMainCampus === 'function' 
+        ? window.isMainCampus(activeCampus) 
+        : (!activeCampus || activeCampus.includes('Kolkata Main') || activeCampus.includes('Salt Lake'));
+
+      const allItems = this.data[collection] || [];
+      if (isMain) {
+        return allItems.filter(item => {
+          if (!item.campus) return true;
+          return typeof window.isMainCampus === 'function' 
+            ? window.isMainCampus(item.campus) 
+            : (item.campus.includes('Kolkata Main') || item.campus.includes('Salt Lake'));
+        });
+      } else {
+        return allItems.filter(item => item.campus === activeCampus);
+      }
+    }
+
+    getAll(collection) {
       return this.data[collection] || [];
     }
 
-    find(collection, id) {
-      const list = this.get(collection);
+    find(collection, id, campus = null) {
+      const list = this.get(collection, campus);
       return list.find((item) => String(item.id) === String(id)) || null;
     }
 
@@ -238,8 +291,12 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
       if (!this.data[collection]) {
         this.data[collection] = [];
       }
+      const activeCampus = (typeof window.getActiveCampus === 'function') 
+        ? window.getActiveCampus() 
+        : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
       const newItem = {
         id: Date.now() + Math.floor(Math.random() * 1000),
+        campus: item.campus || activeCampus,
         ...item,
       };
       this.data[collection].unshift(newItem);
@@ -248,7 +305,7 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
     }
 
     update(collection, id, updates) {
-      const list = this.get(collection);
+      const list = this.data[collection] || [];
       const index = list.findIndex((item) => String(item.id) === String(id));
       if (index !== -1) {
         this.data[collection][index] = { ...this.data[collection][index], ...updates };
@@ -259,7 +316,7 @@ window.canManage = function (allowedRoles = ['super_admin', 'admin']) {
     }
 
     delete(collection, id) {
-      const list = this.get(collection);
+      const list = this.data[collection] || [];
       this.data[collection] = list.filter((item) => String(item.id) !== String(id));
       this.save();
       return true;

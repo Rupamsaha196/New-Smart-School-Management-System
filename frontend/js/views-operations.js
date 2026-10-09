@@ -12,6 +12,10 @@ let libraryStudents = [];
 let activeLibraryTab = 'catalogue';
 
 async function renderLibrary() {
+  books = [];
+  libraryIssues = [];
+  libraryStudents = [];
+
   try {
     const [bRes, iRes, sRes] = await Promise.all([
       api.get('/library/books'),
@@ -23,27 +27,28 @@ async function renderLibrary() {
       books = bRes.data;
     } else if (Array.isArray(bRes)) {
       books = bRes;
+    } else if (window.SS_STORE) {
+      books = window.SS_STORE.get('books') || [];
     }
 
     if (Array.isArray(iRes.data)) {
       libraryIssues = iRes.data;
     } else if (Array.isArray(iRes)) {
       libraryIssues = iRes;
+    } else if (window.SS_STORE) {
+      libraryIssues = window.SS_STORE.get('library_issues') || [];
     }
 
     if (Array.isArray(sRes.data)) {
       libraryStudents = sRes.data;
     } else if (Array.isArray(sRes)) {
       libraryStudents = sRes;
+    } else if (window.SS_STORE) {
+      libraryStudents = window.SS_STORE.get('students') || [];
     }
   } catch (err) {
     console.warn('Library central DB sync fallback:', err);
-    if (window.SS_STORE) books = window.SS_STORE.get('books');
-  }
-
-  // Fallback students if DB returned empty
-  if (libraryStudents.length === 0 && window.SS_STORE) {
-    libraryStudents = window.SS_STORE.get('students') || [];
+    if (window.SS_STORE) books = window.SS_STORE.get('books') || [];
   }
 
   const totalTitles = books.length;
@@ -165,7 +170,7 @@ async function renderLibrary() {
 
 function renderBookRows(items) {
   if (!items || items.length === 0) {
-    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No books available in catalog. Click "Add New Book Title".</td></tr>`;
+    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No books available in catalog for this institution. Click "Add New Book Title".</td></tr>`;
   }
   const canManageLib = window.canManage ? window.canManage(['librarian', 'teacher']) : true;
 
@@ -194,7 +199,7 @@ function renderBookRows(items) {
 
 function renderIssueRows(items) {
   if (!items || items.length === 0) {
-    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No active book loans. Click "Issue Book to Student" to issue books from catalogue.</td></tr>`;
+    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No active book loans for this institution. Click "Issue Book to Student".</td></tr>`;
   }
   const canManageLib = window.canManage ? window.canManage(['librarian', 'teacher']) : true;
 
@@ -274,13 +279,13 @@ function bindLibraryEvents() {
           <div class="form-group" style="grid-column: span 2;">
             <label class="form-label font-semibold">Select Book Title *</label>
             <select class="form-select" id="modal-issue-book">
-              ${bookOptions || '<option value="1">Advanced Physics (8 available)</option>'}
+              ${bookOptions || '<option value="" disabled selected>No books available in catalogue (Add book first)</option>'}
             </select>
           </div>
           <div class="form-group" style="grid-column: span 2;">
             <label class="form-label font-semibold">Borrower Student *</label>
             <select class="form-select" id="modal-issue-student">
-              ${studentOptions || '<option value="1">Aarav Sharma (Class 10-A • Adm: SS2025001)</option>'}
+              ${studentOptions || '<option value="" disabled selected>No students enrolled in this institution</option>'}
             </select>
           </div>
           <div class="form-group">
@@ -541,18 +546,19 @@ function bindLibraryEvents() {
 let routes = [];
 
 async function renderTransport() {
+  routes = [];
   try {
     const res = await api.get('/transport/routes');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    if (Array.isArray(res.data)) {
       routes = res.data;
-    } else if (Array.isArray(res) && res.length > 0) {
+    } else if (Array.isArray(res)) {
       routes = res;
     } else if (window.SS_STORE) {
-      routes = window.SS_STORE.get('routes');
+      routes = window.SS_STORE.get('routes') || [];
     }
   } catch (err) {
     console.warn('Transport central DB sync fallback:', err);
-    if (window.SS_STORE) routes = window.SS_STORE.get('routes');
+    if (window.SS_STORE) routes = window.SS_STORE.get('routes') || [];
   }
 
   const canManageTransport = window.canManage ? window.canManage() : false;
@@ -562,13 +568,7 @@ async function renderTransport() {
 
   const totalBuses = routes.length;
   const totalRiders = routes.reduce((acc, r) => acc + (r.student_count || 0), 0);
-  const activeBus = routes[0] || {
-    route_title: 'Route 1 - Salt Lake Sector V Express',
-    vehicle_no: 'WB-02-AK-9842',
-    driver_name: 'Ramesh Yadav',
-    driver_phone: '+91 98765 43201',
-    stops: 'Sector V Gate 2, City Center Mall, Ultadanga Station, Salt Lake Stadium',
-  };
+  const activeBus = routes.length > 0 ? routes[0] : null;
 
   return `
     <div class="animate-fadeIn">
@@ -705,7 +705,7 @@ async function renderTransport() {
 
 function renderRouteRows(items, canManageTransport = false) {
   if (!items || items.length === 0) {
-    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No routes configured yet.</td></tr>`;
+    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No transport routes configured for this institution. Click "Add Bus Route" to add one.</td></tr>`;
   }
   return items.map(r => `
     <tr>
@@ -1193,19 +1193,22 @@ let hostels = [];
 let hostelAllocations = [];
 
 async function renderHostel() {
+  const activeCampus = typeof window.getActiveCampus === 'function' ? window.getActiveCampus() : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
+  const campusCacheKey = `smart_school_hostel_alloc_${activeCampus.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+  hostels = [];
+  hostelAllocations = [];
+
   if (window.SS_STORE) {
     hostels = window.SS_STORE.get('hostels') || [];
-    const localAllocs = window.SS_STORE.get('hostel_allocations');
-    if (Array.isArray(localAllocs) && localAllocs.length > 0) {
-      hostelAllocations = localAllocs;
-    }
+    hostelAllocations = window.SS_STORE.get('hostel_allocations') || [];
   }
 
   try {
-    const cached = localStorage.getItem('smart_school_hostel_allocations');
+    const cached = localStorage.getItem(campusCacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) hostelAllocations = parsed;
+      if (Array.isArray(parsed)) hostelAllocations = parsed;
     }
   } catch {}
 
@@ -1214,15 +1217,18 @@ async function renderHostel() {
       api.get('/hostels').catch(() => ({ data: [] })),
       api.get('/hostels/allocations').catch(() => ({ data: [] }))
     ]);
-    const hData = Array.isArray(hRes.data) ? hRes.data : (Array.isArray(hRes) ? hRes : []);
-    const aData = Array.isArray(aRes.data) ? aRes.data : (Array.isArray(aRes) ? aRes : []);
-
-    if (hData.length > 0) hostels = hData;
-    if (aData.length > 0) {
-      hostelAllocations = aData;
+    if (Array.isArray(hRes.data)) {
+      hostels = hRes.data;
+    } else if (Array.isArray(hRes)) {
+      hostels = hRes;
+    }
+    if (Array.isArray(aRes.data)) {
+      hostelAllocations = aRes.data;
       try {
-        localStorage.setItem('smart_school_hostel_allocations', JSON.stringify(hostelAllocations));
+        localStorage.setItem(campusCacheKey, JSON.stringify(hostelAllocations));
       } catch {}
+    } else if (Array.isArray(aRes)) {
+      hostelAllocations = aRes;
     }
   } catch (e) {
     console.warn('Hostels fetch fallback:', e);
@@ -1327,7 +1333,7 @@ async function renderHostel() {
 
 function renderHostelRows(items, allocations = []) {
   if (!items || items.length === 0) {
-    return `<tr><td colspan="6" class="text-center p-8 text-secondary">No hostels configured. Click "Add Hostel Block".</td></tr>`;
+    return `<tr><td colspan="6" class="text-center p-8 text-secondary">No residential hostel wings configured for this institution. Click "Add Hostel Block" to register one.</td></tr>`;
   }
   return items.map(h => {
     const allocatedInBlock = (allocations || []).filter(a => String(a.hostel_id) === String(h.id)).length;
@@ -1356,7 +1362,7 @@ function renderHostelRows(items, allocations = []) {
 
 function renderAllocationRows(items) {
   if (!items || items.length === 0) {
-    return `<tr><td colspan="8" class="text-center p-8 text-secondary">No students allocated to hostels yet. Click "Allocate Student to Hostel" above to assign rooms.</td></tr>`;
+    return `<tr><td colspan="8" class="text-center p-8 text-secondary">No students allocated to hostels in this institution yet. Click "Allocate Student to Hostel" above to assign rooms.</td></tr>`;
   }
   return items.map(a => `
     <tr>
@@ -1608,13 +1614,13 @@ function bindHostelEvents() {
             <div class="form-group" style="grid-column: span 2;">
               <label class="form-label">Select Student *</label>
               <select class="form-select" id="modal-alloc-student" required>
-                ${studentOptions || '<option value="1">Aarav Sharma (SS2025001)</option>'}
+                ${studentOptions || '<option value="" disabled selected>No students enrolled in this institution (Add student first)</option>'}
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Select Hostel Wing *</label>
               <select class="form-select" id="modal-alloc-hostel" required>
-                ${hostelOptions || '<option value="1">Boys Hostel A</option>'}
+                ${hostelOptions || '<option value="" disabled selected>No hostels configured (Add hostel block first)</option>'}
               </select>
             </div>
             <div class="form-group">
@@ -1637,8 +1643,14 @@ function bindHostelEvents() {
           </div>
         `,
         onSave: async () => {
-          const studentId = parseInt(document.getElementById('modal-alloc-student').value) || 1;
-          const hostelId = parseInt(document.getElementById('modal-alloc-hostel').value) || 1;
+          const rawStudent = document.getElementById('modal-alloc-student')?.value;
+          const rawHostel = document.getElementById('modal-alloc-hostel')?.value;
+          if (!rawStudent || !rawHostel) {
+            if (window.showToast) window.showToast('Please select both a valid Student and Hostel Wing', 'warning');
+            return false;
+          }
+          const studentId = parseInt(rawStudent);
+          const hostelId = parseInt(rawHostel);
           const roomNo = document.getElementById('modal-alloc-room').value.trim() || 'Room 101';
           const roomType = document.getElementById('modal-alloc-room-type').value;
           const joinDate = document.getElementById('modal-alloc-date').value || new Date().toISOString().split('T')[0];
@@ -1714,7 +1726,9 @@ function bindHostelEvents() {
             window.SS_STORE.add('hostel_allocations', newAllocation);
           }
           try {
-            localStorage.setItem('smart_school_hostel_allocations', JSON.stringify(hostelAllocations));
+            const activeCampus = typeof window.getActiveCampus === 'function' ? window.getActiveCampus() : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
+            const campusCacheKey = `smart_school_hostel_alloc_${activeCampus.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            localStorage.setItem(campusCacheKey, JSON.stringify(hostelAllocations));
           } catch {}
 
           const tbody = document.getElementById('hostel-allocations-tbody');
@@ -1747,19 +1761,20 @@ let notices = [];
 
 async function renderNotices() {
   const canPostNotice = window.canManage ? window.canManage(['teacher', 'receptionist', 'accountant', 'librarian']) : false;
+  notices = [];
 
   try {
     const res = await api.get('/notices');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    if (Array.isArray(res.data)) {
       notices = res.data;
-    } else if (Array.isArray(res) && res.length > 0) {
+    } else if (Array.isArray(res)) {
       notices = res;
     } else if (window.SS_STORE) {
-      notices = window.SS_STORE.get('notices');
+      notices = window.SS_STORE.get('notices') || [];
     }
   } catch (err) {
     console.warn('Notices central DB sync fallback:', err);
-    if (window.SS_STORE) notices = window.SS_STORE.get('notices');
+    if (window.SS_STORE) notices = window.SS_STORE.get('notices') || [];
   }
 
   return `
@@ -1796,7 +1811,7 @@ async function renderNotices() {
 function renderNoticeItems(items, canPost) {
   if (!items || items.length === 0) {
     const hint = canPost ? ' Click "Post New Circular" to add one.' : '';
-    return `<div class="p-8 text-center text-secondary">No notices published yet.${hint}</div>`;
+    return `<div class="p-8 text-center text-secondary">No notices published for this institution yet.${hint}</div>`;
   }
   return items.map((n, idx) => `
     <div class="p-5 rounded-md notice-card cursor-pointer" data-id="${n.id || idx}" style="background: var(--bg-input); border-left: 4px solid var(--primary-600); transition: all 0.2s ease;">

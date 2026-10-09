@@ -10,7 +10,8 @@ class Academics extends REST_Controller {
     }
 
     public function classes(): void {
-        $classes = $this->academics_model->get_classes();
+        $campus = $this->get_active_campus();
+        $classes = $this->academics_model->get_classes($campus);
         $this->response($classes);
     }
 
@@ -22,9 +23,12 @@ class Academics extends REST_Controller {
             return;
         }
 
+        $campus = !empty($p['campus']) ? $p['campus'] : $this->get_active_campus();
+
+        $this->apply_campus_filter('', $campus);
         $existing = $this->db->where('LOWER(name)', strtolower($name))->get('school_classes')->row_array();
         if ($existing) {
-            $this->error("Duplicate entry: A class with name '{$name}' already exists.", 409);
+            $this->error("Duplicate entry: A class with name '{$name}' already exists in this institution.", 409);
             return;
         }
 
@@ -34,6 +38,7 @@ class Academics extends REST_Controller {
             'name'          => $name,
             'sections'      => $sections,
             'class_teacher' => $teacher,
+            'campus'        => $campus,
             'created_at'    => date('Y-m-d H:i:s'),
             'updated_at'    => date('Y-m-d H:i:s'),
         ]);

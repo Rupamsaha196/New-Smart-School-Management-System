@@ -3,9 +3,18 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Fee_model extends CI_Model {
 
-    public function get_fees(?int $student_id = null): array {
+    public function get_fees(?int $student_id = null, ?string $campus = null): array {
         if ($student_id) {
             $this->db->where('student_id', $student_id);
+        }
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
         }
         return $this->db->get('student_fees')->result_array();
     }
@@ -22,7 +31,16 @@ class Fee_model extends CI_Model {
         return $this->db->get('fee_discounts')->result_array();
     }
 
-    public function summary(): array {
+    public function summary(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         $fees = $this->db->get('student_fees')->result_array();
         $total_due = array_sum(array_column($fees, 'amount'));
         $total_collected = array_sum(array_column($fees, 'paid'));
@@ -36,10 +54,11 @@ class Fee_model extends CI_Model {
         ];
     }
 
-    public function quick_create(int $student_id, float $amount, string $type, bool $collect_now): int {
+    public function quick_create(int $student_id, float $amount, string $type, bool $collect_now, ?string $campus = null): int {
         $student = $this->db->where('id', $student_id)->get('students')->row_array();
         $name = $student ? ($student['first_name'] . ' ' . $student['last_name']) : 'Student';
         $receipt_no = 'SS-REC-' . date('Y') . '-' . str_pad((string)rand(100, 9999), 5, '0', STR_PAD_LEFT);
+        $campus_val = $campus ?: ($student['campus'] ?? 'Kolkata Main Campus (Salt Lake Sector V)');
 
         $data = [
             'student_id'   => $student_id,
@@ -48,6 +67,7 @@ class Fee_model extends CI_Model {
             'amount'       => $amount,
             'paid'         => $collect_now ? $amount : 0,
             'status'       => $collect_now ? 'Paid' : 'Pending',
+            'campus'       => $campus_val,
             'due_date'     => date('Y-m-d', strtotime('+15 days')),
             'date'         => $collect_now ? date('Y-m-d') : null,
             'payment_mode' => $collect_now ? 'Cash Counter' : 'Pending',

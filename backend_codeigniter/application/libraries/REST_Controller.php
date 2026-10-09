@@ -60,6 +60,45 @@ class REST_Controller extends CI_Controller {
     }
 
     /**
+     * Resolve the active institution/campus from HTTP request headers or query params
+     */
+    public function get_active_campus(): string {
+        $campus = $this->input->get_request_header('X-Campus-Name')
+            ?: $this->input->get_request_header('Campus')
+            ?: $this->input->get('campus')
+            ?: $this->input->post('campus');
+        return (!empty($campus) && strlen(trim((string)$campus)) > 0) 
+            ? trim((string)$campus) 
+            : 'Kolkata Main Campus (Salt Lake Sector V)';
+    }
+
+    /**
+     * Check if a campus name refers to the primary 'Kolkata Main' institution
+     */
+    public function is_main_campus(?string $campus): bool {
+        if (empty($campus)) return true;
+        $c = strtolower(trim($campus));
+        return (strpos($c, 'kolkata main') !== false || strpos($c, 'salt lake') !== false || $c === 'main' || $c === 'main campus');
+    }
+
+    /**
+     * Apply multi-campus isolation to CodeIgniter QueryBuilder
+     * If Kolkata Main: matches explicit Kolkata Main records, NULL, or empty records
+     * If other institution: strictly isolates to that campus (returns 0 records if none entered yet)
+     */
+    public function apply_campus_filter(string $table_alias = '', ?string $campus = null): void {
+        $campus = $campus ?? $this->get_active_campus();
+        $col = !empty($table_alias) ? "{$table_alias}.campus" : "campus";
+        $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+
+        if ($this->is_main_campus($campus)) {
+            $this->db->where("({$col} = '{$main_name}' OR {$col} = 'Kolkata Main' OR {$col} LIKE '%Kolkata Main%' OR {$col} IS NULL OR {$col} = '')", null, false);
+        } else {
+            $this->db->where($col, $campus);
+        }
+    }
+
+    /**
      * Replay cached response if Idempotency-Key matches previous request
      */
     protected function check_idempotency(): void {

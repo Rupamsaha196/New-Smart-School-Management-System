@@ -14,12 +14,14 @@ class Operations extends REST_Controller {
             $this->store_book();
             return;
         }
-        $books = $this->ops->get_books();
+        $campus = $this->get_active_campus();
+        $books = $this->ops->get_books($campus);
         $this->response($books);
     }
 
     public function library_stats(): void {
-        $stats = $this->ops->library_stats();
+        $campus = $this->get_active_campus();
+        $stats = $this->ops->library_stats($campus);
         $this->response($stats);
     }
 
@@ -48,7 +50,8 @@ class Operations extends REST_Controller {
             $this->store_route();
             return;
         }
-        $routes = $this->ops->get_routes();
+        $campus = $this->get_active_campus();
+        $routes = $this->ops->get_routes($campus);
         $this->response($routes);
     }
 
@@ -57,12 +60,14 @@ class Operations extends REST_Controller {
             $this->store_hostel();
             return;
         }
-        $hostels = $this->ops->get_hostels();
+        $campus = $this->get_active_campus();
+        $hostels = $this->ops->get_hostels($campus);
         $this->response($hostels);
     }
 
     public function notices(): void {
-        $notices = $this->ops->get_notices();
+        $campus = $this->get_active_campus();
+        $notices = $this->ops->get_notices($campus);
         $this->response($notices);
     }
 
@@ -218,10 +223,7 @@ class Operations extends REST_Controller {
 
         $student_id = (int)$payload['student_id'];
         $existing = $this->db->where('student_id', $student_id)
-                             ->group_start()
-                                 ->where('leave_date IS NULL', null, false)
-                                 ->or_where('leave_date >=', date('Y-m-d'))
-                             ->group_end()
+                             ->where("(leave_date IS NULL OR leave_date >= '" . date('Y-m-d') . "')", null, false)
                              ->get('student_hostels')->row_array();
         if ($existing) {
             $this->error("Duplicate allocation: Student is already actively assigned to a hostel room.", 409);

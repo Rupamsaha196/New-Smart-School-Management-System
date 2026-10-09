@@ -3,16 +3,24 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Student_model extends CI_Model {
 
-    public function get_all(?string $search = null, ?string $class_id = null): array {
+    public function get_all(?string $search = null, ?string $class_id = null, ?string $campus = null): array {
         $this->db->select("students.*, CONCAT(TRIM(students.first_name), ' ', TRIM(students.last_name)) as name, school_classes.name as class_name", FALSE);
         $this->db->join('school_classes', 'school_classes.id = students.class_id', 'left');
         if ($search) {
-            $this->db->like('students.first_name', $search);
-            $this->db->or_like('students.last_name', $search);
-            $this->db->or_like('students.admission_no', $search);
+            $s = $this->db->escape_like_str($search);
+            $this->db->where("(students.first_name LIKE '%{$s}%' OR students.last_name LIKE '%{$s}%' OR students.admission_no LIKE '%{$s}%')", null, false);
         }
         if ($class_id) {
             $this->db->where('students.class_id', $class_id);
+        }
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(students.campus = '{$main_name}' OR students.campus = 'Kolkata Main' OR students.campus LIKE '%Kolkata Main%' OR students.campus IS NULL OR students.campus = '')", null, false);
+            } else {
+                $this->db->where('students.campus', $campus);
+            }
         }
         $this->db->order_by('students.id', 'DESC');
         $rows = $this->db->get('students')->result_array();
@@ -80,7 +88,7 @@ class Student_model extends CI_Model {
         }
 
         $allowed = [
-            'admission_no', 'first_name', 'last_name', 'dob', 'gender', 'blood_group',
+            'campus', 'admission_no', 'first_name', 'last_name', 'dob', 'gender', 'blood_group',
             'religion', 'category', 'caste', 'admission_date', 'class_id', 'section_id',
             'roll_no', 'rte', 'previous_school', 'previous_class', 'email', 'phone',
             'address', 'city', 'state', 'pincode', 'country', 'father_name', 'father_phone',

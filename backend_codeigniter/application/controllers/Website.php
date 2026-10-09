@@ -81,13 +81,8 @@ class Website extends REST_Controller {
             $this->db->where('target_class', $class);
         }
         if (!empty($search)) {
-            $this->db->group_start();
-            $this->db->like('parent_name', $search);
-            $this->db->or_like('student_name', $search);
-            $this->db->or_like('phone', $search);
-            $this->db->or_like('inquiry_id', $search);
-            $this->db->or_like('email', $search);
-            $this->db->group_end();
+            $esc_s = $this->db->escape_like_str($search);
+            $this->db->where("(parent_name LIKE '%{$esc_s}%' OR student_name LIKE '%{$esc_s}%' OR phone LIKE '%{$esc_s}%' OR inquiry_id LIKE '%{$esc_s}%' OR email LIKE '%{$esc_s}%')", null, false);
         }
 
         $this->db->order_by('created_at', 'DESC');

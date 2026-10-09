@@ -9,7 +9,8 @@ class Exams extends REST_Controller {
     }
 
     public function index(): void {
-        $exams = $this->exam_model->get_exams();
+        $campus = $this->get_active_campus();
+        $exams = $this->exam_model->get_exams($campus);
         $this->response($exams);
     }
 
@@ -20,7 +21,11 @@ class Exams extends REST_Controller {
             $this->error('Exam name is required', 400);
             return;
         }
-        $id = $this->exam_model->create_exam($payload ?: $this->input->post());
+        $data = $payload ?: $this->input->post();
+        if (empty($data['campus'])) {
+            $data['campus'] = $this->get_active_campus();
+        }
+        $id = $this->exam_model->create_exam($data);
         $this->success(['id' => $id], 'Exam scheduled successfully', 201);
     }
 

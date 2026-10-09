@@ -460,10 +460,30 @@ function renderAttendanceReportContent() {
 /* ==========================================================================
    Tab 4: Examination Reports Renderers (Real Data)
    ========================================================================== */
+function getFilteredExamRecords() {
+  const eRep = (reportsLivePayload && reportsLivePayload.exam_report) || {};
+  let records = eRep.records || [];
+
+  if (reportClassFilter) {
+    records = records.filter(r =>
+      (r.class_name || '').toLowerCase() === reportClassFilter.toLowerCase()
+    );
+  }
+
+  return records;
+}
+
 function renderExamsReportContent() {
   const eRep = (reportsLivePayload && reportsLivePayload.exam_report) || {};
   const subjectSummary = eRep.subject_summary || [];
-  const records = eRep.records || [];
+  const records = getFilteredExamRecords();
+
+  // Filter subject summary by class if needed
+  const filteredSubjects = reportClassFilter
+    ? subjectSummary.filter(s =>
+        records.some(r => r.subject === s.subject)
+      )
+    : subjectSummary;
 
   return `
     <div class="grid-3 mb-6">
@@ -488,11 +508,11 @@ function renderExamsReportContent() {
     <div class="card mb-6">
       <div class="card-header flex justify-between items-center">
         <div>
-          <span class="card-title">Subject-Wise Assessment Tabulation (Real Data)</span>
+          <span class="card-title">Subject-Wise Assessment Tabulation${reportClassFilter ? ` (${reportClassFilter})` : ' (Real Data)'}</span>
           <div class="text-xs text-secondary mt-1">Evaluated directly from real student scorecards in MySQL</div>
         </div>
         <button class="btn btn-primary btn-sm" id="export-exam-csv-btn">
-          ${icon('download', 16)} Export Scorecards CSV
+          ${icon('download', 16)} Export Scorecards CSV${reportClassFilter ? ` (${reportClassFilter})` : ''}
         </button>
       </div>
       <div style="overflow-x: auto;">
@@ -508,7 +528,7 @@ function renderExamsReportContent() {
             </tr>
           </thead>
           <tbody>
-            ${subjectSummary.length === 0 ? `<tr><td colspan="6" class="text-center p-8 text-secondary">No exam marks entered yet.</td></tr>` : subjectSummary.map(s => `
+            ${filteredSubjects.length === 0 ? `<tr><td colspan="6" class="text-center p-8 text-secondary">No exam marks entered yet${reportClassFilter ? ` for ${reportClassFilter}` : ''}.</td></tr>` : filteredSubjects.map(s => `
               <tr>
                 <td><strong>${s.subject}</strong></td>
                 <td><span class="badge badge-primary">${s.exam}</span></td>
@@ -527,7 +547,7 @@ function renderExamsReportContent() {
     <div class="card mb-6">
       <div class="card-header flex justify-between items-center">
         <div>
-          <span class="card-title">Evaluated Student Scorecards (${records.length} Results)</span>
+          <span class="card-title">Evaluated Student Scorecards (${records.length} Results${reportClassFilter ? ` — ${reportClassFilter}` : ''})</span>
           <div class="text-xs text-secondary mt-1">Individual marks, CBSE grades, and pass/fail indicators</div>
         </div>
       </div>
@@ -547,7 +567,7 @@ function renderExamsReportContent() {
             </tr>
           </thead>
           <tbody>
-            ${records.length === 0 ? `<tr><td colspan="9" class="text-center p-8 text-secondary">No scorecard records in database.</td></tr>` : records.map(r => `
+            ${records.length === 0 ? `<tr><td colspan="9" class="text-center p-8 text-secondary">No scorecard records${reportClassFilter ? ` for ${reportClassFilter}` : ''} in database.</td></tr>` : records.map(r => `
               <tr>
                 <td><code>${r.admission_no}</code></td>
                 <td><strong>${r.student_name}</strong></td>
@@ -608,6 +628,9 @@ function bindReportsEvents() {
   function refreshReportsUI() {
     const studentSec = document.getElementById('student-report-content');
     if (studentSec) studentSec.innerHTML = renderStudentReportContent();
+    // Also refresh exam report if active, since exam filter respects class filter too
+    const examSec = document.getElementById('exams-report-content');
+    if (examSec && activeReportTab === 'exams') examSec.innerHTML = renderExamsReportContent();
     attachExportButtons();
     if (window.showToast) window.showToast('Reports recalculated dynamically', 'info');
   }
@@ -722,12 +745,22 @@ function bindReportsEvents() {
       };
     }
 
-    // 4. Export Examination CSV (Real Evaluated Student Scorecards)
+    // 4. Export Examination CSV (Real Evaluated Student Scorecards — filtered by class)
     const exportExamBtn = document.getElementById('export-exam-csv-btn');
     if (exportExamBtn) {
       exportExamBtn.onclick = () => {
-        const eRep = (reportsLivePayload && reportsLivePayload.exam_report) || {};
-        const records = eRep.records || [];
+        // Always use filtered records (respects the active class filter)
+        const records = getFilteredExamRecords();
+
+        if (records.length === 0) {
+          if (window.showToast) window.showToast(
+            reportClassFilter
+              ? `No exam records found for ${reportClassFilter}`
+              : 'No exam records in the database',
+            'warning'
+          );
+          return;
+        }
 
         const headers = [
           'Admission No',
@@ -757,7 +790,10 @@ function bindReportsEvents() {
           r.status
         ]);
 
-        window.downloadCsvReport('SmartSchool_Exam_Scorecards_Report', headers, rows);
+        const fileName = reportClassFilter
+          ? `SmartSchool_Exam_Scorecards_${reportClassFilter.replace(/\s+/g, '_')}_Report`
+          : 'SmartSchool_Exam_Scorecards_Report';
+        window.downloadCsvReport(fileName, headers, rows);
       };
     }
   }

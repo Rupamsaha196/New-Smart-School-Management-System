@@ -13,32 +13,38 @@ class Attendance extends REST_Controller {
     public function index(): void {
         $date = $this->input->get('date') ?: date('Y-m-d');
         $class_id = $this->input->get('class_id');
+        $campus = $this->get_active_campus();
 
         $this->db->where('date', $date);
         if ($class_id) {
             $this->db->where('class_id', $class_id);
         }
+        $this->apply_campus_filter('', $campus);
         $records = $this->db->get('attendances')->result_array();
         $this->response($records);
     }
 
     public function bulk(): void {
         $payload = $this->get_payload();
+        $campus = $this->get_active_campus();
         $date = !empty($payload['date']) ? $payload['date'] : ($this->input->post('date') ?: date('Y-m-d'));
         $class_id = !empty($payload['class_id']) ? $payload['class_id'] : $this->input->post('class_id');
         $records = !empty($payload['records']) ? $payload['records'] : ($this->input->post('records') ?: []);
 
-        $count = $this->attendance_model->bulk_mark($date, $records, $class_id ? (int)$class_id : null);
+        $count = $this->attendance_model->bulk_mark($date, $records, $class_id ? (int)$class_id : null, $campus);
         $this->success(['updated_count' => $count], 'Attendance marked successfully');
     }
 
     public function daily_stats(): void {
         $date = $this->input->get('date');
-        $stats = $this->attendance_model->daily_stats($date);
+        $campus = $this->get_active_campus();
+        $stats = $this->attendance_model->daily_stats($date, $campus);
         $this->response($stats);
     }
 
     public function report(): void {
+        $campus = $this->get_active_campus();
+        $this->apply_campus_filter('', $campus);
         $classes = $this->db->get('school_classes')->result_array();
         $class_summary = [];
 

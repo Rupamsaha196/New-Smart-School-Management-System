@@ -12,22 +12,27 @@ class Fees extends REST_Controller {
 
     public function index(): void {
         $student_id = $this->input->get('student_id');
-        $fees = $this->fee_model->get_fees($student_id ? (int)$student_id : null);
+        $campus = $this->get_active_campus();
+        $fees = $this->fee_model->get_fees($student_id ? (int)$student_id : null, $campus);
         $this->response($fees);
     }
 
     public function summary(): void {
-        $summary = $this->fee_model->summary();
+        $campus = $this->get_active_campus();
+        $summary = $this->fee_model->summary($campus);
         $this->response($summary);
     }
 
     public function defaulters(): void {
+        $campus = $this->get_active_campus();
+        $this->apply_campus_filter('', $campus);
         $defaulters = $this->db->where('status', 'Pending')->get('student_fees')->result_array();
         $this->response($defaulters);
     }
 
     public function quick_create(): void {
         $payload = $this->get_payload();
+        $campus = $this->get_active_campus();
         $student_id  = (int)(!empty($payload['student_id']) ? $payload['student_id'] : ($this->input->post('student_id') ?: 1));
         $amount      = floatval(!empty($payload['amount']) ? $payload['amount'] : ($this->input->post('amount') ?: 12500));
         $type        = trim(!empty($payload['type']) ? $payload['type'] : ($this->input->post('type') ?: 'Tuition Fee (Quarterly)'));

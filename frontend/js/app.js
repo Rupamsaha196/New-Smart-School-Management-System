@@ -91,9 +91,13 @@ window.addEventListener('render:woke_up', () => {
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');
+  const activeCampus = (typeof window.getActiveCampus === 'function') 
+    ? window.getActiveCampus() 
+    : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'X-Campus-Name': activeCampus,
     ...(options.headers || {}),
   };
 
@@ -188,7 +192,13 @@ async function request(endpoint, options = {}) {
 const api = {
   get: (endpoint, params = {}) => {
     let url = endpoint;
+    const activeCampus = (typeof window.getActiveCampus === 'function') 
+      ? window.getActiveCampus() 
+      : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
     const query = new URLSearchParams();
+    if (!('campus' in params)) {
+      query.append('campus', activeCampus);
+    }
     Object.entries(params).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') {
         query.append(key, val);
@@ -201,6 +211,12 @@ const api = {
 
   post: async (endpoint, body = {}) => {
     const isFormData = body instanceof FormData;
+    const activeCampus = (typeof window.getActiveCampus === 'function') 
+      ? window.getActiveCampus() 
+      : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
+    if (!isFormData && typeof body === 'object' && body !== null && !body.campus) {
+      body.campus = activeCampus;
+    }
     const res = await request(endpoint, {
       method: 'POST',
       body: isFormData ? body : JSON.stringify(body),
@@ -211,6 +227,12 @@ const api = {
 
   put: async (endpoint, body = {}) => {
     const isFormData = body instanceof FormData;
+    const activeCampus = (typeof window.getActiveCampus === 'function') 
+      ? window.getActiveCampus() 
+      : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
+    if (!isFormData && typeof body === 'object' && body !== null && !body.campus) {
+      body.campus = activeCampus;
+    }
     const res = await request(endpoint, {
       method: 'PUT',
       body: isFormData ? body : JSON.stringify(body),
@@ -1592,10 +1614,14 @@ function formatActivityDate(dateStr) {
 async function renderDashboard() {
   const user = auth.getUser();
   const role = user?.role || 'admin';
+  const activeCampus = (typeof window.getActiveCampus === 'function') 
+    ? window.getActiveCampus() 
+    : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
   let stats = null;
   let loadError = null;
   try {
-    const res = await api.get('/dashboard');
+    const res = await api.get('/dashboard', { campus: activeCampus });
     if (res && res.data) { stats = res.data; }
   } catch (e) {
     console.warn('Dashboard data fetch error:', e);
@@ -1604,7 +1630,8 @@ async function renderDashboard() {
   const todayStr = new Date().toISOString().split('T')[0];
   let localDailyAtt = null;
   try {
-    const lAtt = localStorage.getItem('smart_school_daily_att_' + todayStr);
+    const lAttKey = isMain ? ('smart_school_daily_att_' + todayStr) : ('smart_school_daily_att_' + encodeURIComponent(activeCampus) + '_' + todayStr);
+    const lAtt = localStorage.getItem(lAttKey);
     if (lAtt) {
       const parsed = JSON.parse(lAtt);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1638,6 +1665,10 @@ async function renderDashboard() {
    ADMIN / SUPER ADMIN DASHBOARD
    ===================================================== */
 function _renderAdminDashboard(user, stats, localDailyAtt, errorBanner) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') 
+    ? window.getActiveCampus() 
+    : (localStorage.getItem('active_campus') || 'Kolkata Main Campus (Salt Lake Sector V)');
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
   const todayStr = new Date().toISOString().split('T')[0];
   const totalStudents = stats ? (stats.total_students ?? 0) : 0;
   const totalClasses  = stats ? (stats.total_classes ?? 0) : 0;
@@ -1645,14 +1676,33 @@ function _renderAdminDashboard(user, stats, localDailyAtt, errorBanner) {
   const totalTeachers = stats ? (stats.total_teachers ?? totalStaff) : 0;
   const dailyAtt = (localDailyAtt && localDailyAtt.total > 0)
     ? localDailyAtt
-    : (stats?.daily_attendance || { total: totalStudents, present: totalStudents, absent: 0, rate: 100 });
-  const attRate      = dailyAtt.total > 0 ? dailyAtt.rate : (stats?.attendance_rate ?? 0);
+    : (stats?.daily_attendance || { total: totalStudents, present: (totalStudents > 0 ? totalStudents : 0), absent: 0, rate: (totalStudents > 0 ? 100 : 0) });
+  const attRate      = dailyAtt.total > 0 ? dailyAtt.rate : (totalStudents > 0 ? (stats?.attendance_rate ?? 0) : 0);
   const presentCount = dailyAtt.present ?? 0;
   const absentCount  = dailyAtt.absent ?? 0;
   const totalCount   = dailyAtt.total || totalStudents;
   const feesMonth = stats ? (stats.fees_this_month ?? stats.fees_collected ?? 0) : 0;
   const feesTotal = stats ? (stats.fees_collected ?? 0) : 0;
   const feesDue   = stats ? (stats.fees_due ?? 0) : 0;
+
+  const campusNoticeBanner = !isMain ? `
+    <div class="card mb-4 animate-slideUp" style="background:linear-gradient(90deg, rgba(59,130,246,0.08), rgba(16,185,129,0.08));border:1px solid var(--border-secondary);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius-md);flex-wrap:wrap;gap:12px;">
+      <div class="flex items-center gap-3">
+        <span style="font-size:1.6rem;">🏛️</span>
+        <div>
+          <div style="font-weight:700;font-size:0.95rem;color:var(--text-primary);">Active Institution: ${activeCampus}</div>
+          <div class="text-xs text-secondary mt-0.5">
+            ${totalStudents === 0 ? 'This institution currently has 0 records (null data). Existing historical data belongs to Kolkata Main Campus. Any data you enter will belong strictly to this school.' : `Viewing live isolated records for ${activeCampus}.`}
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a href="#/students/admission" class="btn btn-primary btn-sm">${icon('userPlus', 16)} New Admission</a>
+        <a href="#/staff" class="btn btn-secondary btn-sm">${icon('users', 16)} Add Faculty</a>
+        <a href="#/academics/classes" class="btn btn-secondary btn-sm">${icon('academic', 16)} Add Class</a>
+      </div>
+    </div>
+  ` : '';
   let weekly = (stats?.weekly_attendance && stats.weekly_attendance.length > 0)
     ? stats.weekly_attendance
     : [{ day: 'Mon', pct: 0, val: '0%' }, { day: 'Tue', pct: 0, val: '0%' },
@@ -1713,7 +1763,7 @@ function _renderAdminDashboard(user, stats, localDailyAtt, errorBanner) {
     '<a href="#/students/inquiries" class="btn btn-secondary" style="position:relative;">' + icon('clipboard', 18) + ' Inquiries ' + (stats?.new_inquiries > 0 ? ('<span class="badge badge-danger" style="font-size:0.7rem;padding:2px 6px;margin-left:4px;border-radius:10px;">' + stats.new_inquiries + ' New</span>') : '') + '</a>' +
     '<a href="#/students/admission" class="btn btn-primary">' + icon('userPlus', 18) + ' New Admission</a>' +
     '<a href="#/fees/collection" class="btn btn-secondary">' + icon('banknotes', 18) + ' Collect Fees</a>' +
-    '</div></div>' + errorBanner +
+    '</div></div>' + errorBanner + campusNoticeBanner +
     (stats?.new_inquiries > 0 ? (
       '<div class="card mb-4 animate-slideUp" style="background:linear-gradient(90deg, rgba(239,68,68,0.08), rgba(249,115,22,0.08));border:1px solid var(--danger-500);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius-md);flex-wrap:wrap;gap:10px;">' +
       '<div class="flex items-center gap-3"><span style="font-size:1.4rem;">🔔</span><div>' +
@@ -2213,30 +2263,69 @@ function _renderReceptionistDashboard(user, stats, localDailyAtt, errorBanner) {
 
 /* ---- Students Directory ---- */
 const demoStudents = [
-  { id: 1, admission_no: 'SS2025001', name: 'Aarav Sharma', class_name: 'Class 5', section: 'A', gender: 'Male', phone: '9876543210', status: 'active' },
-  { id: 2, admission_no: 'SS2025002', name: 'Priya Singh', class_name: 'Class 8', section: 'B', gender: 'Female', phone: '9876543211', status: 'active' },
-  { id: 3, admission_no: 'SS2025003', name: 'Rohan Patel', class_name: 'Class 10', section: 'A', gender: 'Male', phone: '9876543212', status: 'active' },
-  { id: 4, admission_no: 'SS2025004', name: 'Ananya Gupta', class_name: 'Class 3', section: 'C', gender: 'Female', phone: '9876543213', status: 'active' },
-  { id: 5, admission_no: 'SS2025005', name: 'Vikram Reddy', class_name: 'Class 12', section: 'A', gender: 'Male', phone: '9876543214', status: 'inactive' },
-  { id: 6, admission_no: 'SS2025006', name: 'Meera Nair', class_name: 'Class 7', section: 'B', gender: 'Female', phone: '9876543215', status: 'active' },
-  { id: 7, admission_no: 'SS2025007', name: 'Arjun Das', class_name: 'Class 9', section: 'A', gender: 'Male', phone: '9876543216', status: 'active' },
-  { id: 8, admission_no: 'SS2025008', name: 'Sanya Chopra', class_name: 'Class 6', section: 'A', gender: 'Female', phone: '9876543217', status: 'active' },
+  { id: 1, admission_no: 'SS2025001', name: 'Aarav Sharma', class_name: 'Class 5', section: 'A', gender: 'Male', phone: '9876543210', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 2, admission_no: 'SS2025002', name: 'Priya Singh', class_name: 'Class 8', section: 'B', gender: 'Female', phone: '9876543211', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 3, admission_no: 'SS2025003', name: 'Rohan Patel', class_name: 'Class 10', section: 'A', gender: 'Male', phone: '9876543212', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 4, admission_no: 'SS2025004', name: 'Ananya Gupta', class_name: 'Class 3', section: 'C', gender: 'Female', phone: '9876543213', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 5, admission_no: 'SS2025005', name: 'Vikram Reddy', class_name: 'Class 12', section: 'A', gender: 'Male', phone: '9876543214', status: 'inactive', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 6, admission_no: 'SS2025006', name: 'Meera Nair', class_name: 'Class 7', section: 'B', gender: 'Female', phone: '9876543215', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 7, admission_no: 'SS2025007', name: 'Arjun Das', class_name: 'Class 9', section: 'A', gender: 'Male', phone: '9876543216', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 8, admission_no: 'SS2025008', name: 'Sanya Chopra', class_name: 'Class 6', section: 'A', gender: 'Female', phone: '9876543217', status: 'active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
 ];
+
+window.getLocalStudents = function(campus = null) {
+  const activeCampus = campus || (typeof window.getActiveCampus === 'function' ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)');
+  const isMain = typeof window.isMainCampus === 'function' ? window.isMainCampus(activeCampus) : true;
+  try {
+    const local = localStorage.getItem('local_students');
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) {
+        if (isMain) {
+          return parsed.filter(s => !s.campus || window.isMainCampus(s.campus));
+        } else {
+          return parsed.filter(s => s.campus === activeCampus);
+        }
+      }
+    }
+  } catch {}
+  return isMain ? demoStudents : [];
+};
+
+window.saveLocalStudent = function(student) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  student.campus = student.campus || activeCampus;
+  try {
+    const local = localStorage.getItem('local_students');
+    let list = local ? JSON.parse(local) : [];
+    if (!Array.isArray(list)) list = [];
+    const idx = list.findIndex(s => String(s.id) === String(student.id));
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...student };
+    } else {
+      list.unshift(student);
+    }
+    localStorage.setItem('local_students', JSON.stringify(list));
+  } catch (e) {
+    console.warn('saveLocalStudent error:', e);
+  }
+};
 
 let allStudents = [];
 
 async function renderStudents() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
+
   try {
-    const res = await api.get('/students');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    const res = await api.get('/students', { campus: activeCampus });
+    if (Array.isArray(res.data)) {
       allStudents = res.data;
     } else {
-      const local = localStorage.getItem('local_students');
-      allStudents = local ? JSON.parse(local) : demoStudents;
+      allStudents = window.getLocalStudents(activeCampus);
     }
   } catch {
-    const local = localStorage.getItem('local_students');
-    allStudents = local ? JSON.parse(local) : demoStudents;
+    allStudents = window.getLocalStudents(activeCampus);
   }
 
   const classes = [...new Set(allStudents.map(s => s.class_name || `Class ${s.class_id || 1}`))].filter(Boolean).sort();
@@ -2268,7 +2357,7 @@ async function renderStudents() {
             </select>
           </div>
           <div class="text-xs text-secondary font-semibold" id="student-count-badge">
-            Showing ${allStudents.length} students
+            Showing ${allStudents.length} students (${activeCampus})
           </div>
         </div>
 
@@ -2296,8 +2385,15 @@ async function renderStudents() {
 }
 
 function renderStudentRows(students) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   if (!students || students.length === 0) {
-    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No students found matching your search.</td></tr>`;
+    return `<tr><td colspan="7" class="text-center p-8 text-secondary">
+      <div style="padding: 24px 12px;">
+        <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">🏛️</span>
+        <strong style="color: var(--text-primary); font-size: 1.05rem;">No students found for ${activeCampus} (0 data)</strong>
+        <p class="text-xs text-secondary mt-1">This institution has no students registered in the system yet. Click <strong>"New Admission"</strong> above to enroll students for this school.</p>
+      </div>
+    </td></tr>`;
   }
 
   return students.map(s => {
@@ -2829,7 +2925,10 @@ function bindAdmissionEvents() {
     const mPhone = document.getElementById('mother_phone')?.value?.trim() || '';
     const mOcc = document.getElementById('mother_occupation')?.value?.trim() || '';
 
+    const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+
     const payload = {
+      campus: activeCampus,
       first_name: fn,
       last_name: ln,
       name: `${fn} ${ln}`.trim(),
@@ -3208,10 +3307,62 @@ function bindQrAttendanceEvents() {
 
 /* ---- Fee Collection & Cashier Desk ---- */
 let foundStudent = null;
-let duesAmount = 12500;
+let duesAmount = 0;
 let lastReceipt = null;
 
 async function renderFeeCollection() {
+  const activeCampus = typeof window.getActiveCampus === 'function' ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  const isMain = typeof window.isMainCampus === 'function' ? window.isMainCampus(activeCampus) : true;
+
+  if (isMain && !foundStudent) {
+    foundStudent = {
+      name: 'Aarav Sharma',
+      admission_no: 'SS2025001',
+      class_name: 'Class 10 - A',
+      campus: activeCampus,
+    };
+    duesAmount = 12500;
+  } else if (!isMain && (!foundStudent || foundStudent.campus !== activeCampus)) {
+    foundStudent = null;
+    duesAmount = 0;
+  }
+
+  const studentDisplayHtml = foundStudent ? `
+    <div class="flex justify-between items-center">
+      <div>
+        <h4 style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;" id="fee-student-name">
+          ${foundStudent.name}
+        </h4>
+        <div class="text-xs text-secondary mt-1" id="fee-student-info">
+          Class: ${foundStudent.class_name} • Adm: <strong>${foundStudent.admission_no}</strong>
+        </div>
+      </div>
+      <div class="text-right">
+        <span class="text-xs text-secondary uppercase font-semibold">Total Outstanding</span>
+        <div class="text-h2" style="color: var(--danger-500); font-weight: 800;" id="fee-dues-amount">
+          ₹${duesAmount.toLocaleString()}
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div class="flex justify-between items-center">
+      <div>
+        <h4 style="font-weight: 700; color: var(--text-tertiary); font-size: 1.05rem;" id="fee-student-name">
+          No Student Selected
+        </h4>
+        <div class="text-xs text-secondary mt-1" id="fee-student-info">
+          Search student by Admission # or Name for <em>${activeCampus}</em>
+        </div>
+      </div>
+      <div class="text-right">
+        <span class="text-xs text-secondary uppercase font-semibold">Total Outstanding</span>
+        <div class="text-h2" style="color: var(--text-tertiary); font-weight: 800;" id="fee-dues-amount">
+          ₹0
+        </div>
+      </div>
+    </div>
+  `;
+
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
@@ -3221,7 +3372,7 @@ async function renderFeeCollection() {
         </div>
         <div class="flex gap-2" style="flex-wrap: wrap;">
           <button type="button" class="btn btn-primary" id="open-quick-fee-btn">${icon('plus', 18)} Quick Fee Create</button>
-          <button type="button" class="btn btn-success" id="open-online-pay-btn" onclick="openOnlinePaymentModal(foundStudent ? foundStudent.name : 'Aarav Sharma', foundStudent ? foundStudent.admission_no : 'SS2025001', duesAmount, 'Tuition Fee (Quarterly)')">⚡ Pay Online (Gateway)</button>
+          <button type="button" class="btn btn-success" id="open-online-pay-btn">⚡ Pay Online (Gateway)</button>
           <a href="#/fees/structure" class="btn btn-secondary">${icon('banknotes', 18)} Fee Structure & Rules</a>
           <a href="#/finance/income-expense" class="btn btn-secondary">Financial Ledger</a>
         </div>
@@ -3234,28 +3385,13 @@ async function renderFeeCollection() {
           <div class="form-group">
             <label class="form-label">Search Student (Admission No or Name)</label>
             <div style="display: flex; gap: 8px;">
-              <input type="text" id="fee-search-input" class="form-input" placeholder="e.g. SS2025001" value="${foundStudent ? foundStudent.admission_no : 'SS2025001'}" />
+              <input type="text" id="fee-search-input" class="form-input" placeholder="e.g. Admission No or Name..." value="${foundStudent ? foundStudent.admission_no : ''}" />
               <button type="button" class="btn btn-primary" id="fee-search-btn">${icon('search', 18)} Lookup</button>
             </div>
           </div>
 
           <div id="student-dues-box" style="background: var(--bg-input); padding: 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
-            <div class="flex justify-between items-center">
-              <div>
-                <h4 style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;" id="fee-student-name">
-                  ${foundStudent ? foundStudent.name : 'Aarav Sharma'}
-                </h4>
-                <div class="text-xs text-secondary mt-1" id="fee-student-info">
-                  Class: ${foundStudent ? foundStudent.class_name : 'Class 5 - A'} • Adm: <strong>${foundStudent ? foundStudent.admission_no : 'SS2025001'}</strong>
-                </div>
-              </div>
-              <div class="text-right">
-                <span class="text-xs text-secondary uppercase font-semibold">Total Outstanding</span>
-                <div class="text-h2" style="color: var(--danger-500); font-weight: 800;" id="fee-dues-amount">
-                  ₹${duesAmount.toLocaleString()}
-                </div>
-              </div>
-            </div>
+            ${studentDisplayHtml}
           </div>
 
           <form id="fee-pay-form">
@@ -3309,14 +3445,14 @@ async function renderFeeCollection() {
             </div>
 
             <div style="font-size: 0.85rem; line-height: 1.8; margin-bottom: 16px;">
-              <div class="flex justify-between"><span class="text-secondary">Student Name:</span><strong id="receipt-st-name">${foundStudent ? foundStudent.name : 'Aarav Sharma'}</strong></div>
-              <div class="flex justify-between"><span class="text-secondary">Admission No:</span><code id="receipt-st-adm">${foundStudent ? foundStudent.admission_no : 'SS2025001'}</code></div>
+              <div class="flex justify-between"><span class="text-secondary">Student Name:</span><strong id="receipt-st-name">${foundStudent ? foundStudent.name : '—'}</strong></div>
+              <div class="flex justify-between"><span class="text-secondary">Admission No:</span><code id="receipt-st-adm">${foundStudent ? foundStudent.admission_no : '—'}</code></div>
               <div class="flex justify-between"><span class="text-secondary">Date:</span><span id="receipt-date">${new Date().toLocaleString()}</span></div>
               <div class="flex justify-between"><span class="text-secondary">Payment Method:</span><strong id="receipt-mode">Cash</strong></div>
               <div class="flex justify-between"><span class="text-secondary">Fee Description:</span><span id="receipt-head">Tuition Fee (Quarterly)</span></div>
               <hr style="margin: 8px 0; border: none; border-top: 1px dashed #cbd5e1;" />
               <div class="flex justify-between" style="font-size: 1.1rem; font-weight: 800;">
-                <span>Amount Paid:</span><span style="color: #059669;" id="receipt-amount">₹12,500</span>
+                <span>Amount Paid:</span><span style="color: #059669;" id="receipt-amount">₹${duesAmount.toLocaleString()}</span>
               </div>
             </div>
 
@@ -3341,9 +3477,13 @@ function bindFeeCollectionEvents() {
   // Dynamic handler for top "Pay Online (Gateway)" button
   if (onlinePayBtn) {
     onlinePayBtn.onclick = () => {
-      const sName = foundStudent ? foundStudent.name : 'Aarav Sharma';
-      const sAdm  = foundStudent ? foundStudent.admission_no : 'SS2025001';
-      const sFeeId = foundStudent ? (foundStudent.fee_id || 0) : 0;
+      if (!foundStudent) {
+        showToast('Please search and select a student first', 'warning');
+        return;
+      }
+      const sName = foundStudent.name;
+      const sAdm  = foundStudent.admission_no;
+      const sFeeId = foundStudent.fee_id || 0;
       const head = document.getElementById('fee-head-select')?.value || 'Tuition Fee (Quarterly)';
       const amt = parseFloat(document.getElementById('fee-amount-input')?.value) || duesAmount;
       if (typeof window.openOnlinePaymentModal === 'function') {

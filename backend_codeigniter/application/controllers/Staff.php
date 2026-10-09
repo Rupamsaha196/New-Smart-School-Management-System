@@ -9,12 +9,16 @@ class Staff extends REST_Controller {
     }
 
     public function index(): void {
-        $staff = $this->staff_model->get_all();
+        $campus = $this->get_active_campus();
+        $staff = $this->staff_model->get_all($campus);
         $this->response($staff);
     }
 
     public function store(): void {
         $payload = $this->get_payload();
+        if (empty($payload['campus'])) {
+            $payload['campus'] = $this->get_active_campus();
+        }
         if (empty($payload['name'])) {
             $this->error('Staff name is required', 422);
             return;

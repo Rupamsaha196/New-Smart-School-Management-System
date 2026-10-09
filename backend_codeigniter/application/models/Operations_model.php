@@ -4,12 +4,21 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 class Operations_model extends CI_Model {
 
     // ── Library ──────────────────────────────
-    public function get_books(): array {
+    public function get_books(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         return $this->db->get('library_books')->result_array();
     }
 
-    public function library_stats(): array {
-        $books = $this->db->get('library_books')->result_array();
+    public function library_stats(?string $campus = null): array {
+        $books = $this->get_books($campus);
         $total = array_sum(array_column($books, 'qty')) ?: array_sum(array_column($books, 'total_copies'));
         $avail = array_sum(array_column($books, 'available_qty')) ?: array_sum(array_column($books, 'available_copies'));
         $issues = $this->db->where('return_date', null)->count_all_results('book_issues');
@@ -21,7 +30,16 @@ class Operations_model extends CI_Model {
     }
 
     // ── Transport ────────────────────────────
-    public function get_routes(): array {
+    public function get_routes(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         return $this->db->get('transport_routes')->result_array();
     }
 
@@ -30,7 +48,16 @@ class Operations_model extends CI_Model {
     }
 
     // ── Hostel ───────────────────────────────
-    public function get_hostels(): array {
+    public function get_hostels(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         return $this->db->get('hostels')->result_array();
     }
 
@@ -42,7 +69,16 @@ class Operations_model extends CI_Model {
     }
 
     // ── Notices ──────────────────────────────
-    public function get_notices(): array {
+    public function get_notices(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         return $this->db->order_by('created_at', 'DESC')->get('notices')->result_array();
     }
 

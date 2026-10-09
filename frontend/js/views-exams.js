@@ -6,21 +6,27 @@
 /* ==========================================================================
    Examinations Schedule View
    ========================================================================== */
-let examsList = [
-  { id: 1, name: 'Term 1 Mid-Term Examination 2026', type: 'Mid Term', term: 'Term 1', start_date: '2026-10-12', end_date: '2026-10-22', status: 'Upcoming' },
-  { id: 2, name: 'Unit Test Series 1', type: 'Unit Test', term: 'Term 1', start_date: '2026-08-01', end_date: '2026-08-08', status: 'Completed' },
-  { id: 3, name: 'Annual Final Board Mock Examinations', type: 'Final Exam', term: 'Annual', start_date: '2027-01-15', end_date: '2027-01-28', status: 'Scheduled' },
+const defaultExamsList = [
+  { id: 1, name: 'Term 1 Mid-Term Examination 2026', type: 'Mid Term', term: 'Term 1', start_date: '2026-10-12', end_date: '2026-10-22', status: 'Upcoming', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 2, name: 'Unit Test Series 1', type: 'Unit Test', term: 'Term 1', start_date: '2026-08-01', end_date: '2026-08-08', status: 'Completed', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 3, name: 'Annual Final Board Mock Examinations', type: 'Final Exam', term: 'Annual', start_date: '2027-01-15', end_date: '2027-01-28', status: 'Scheduled', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
 ];
 
+let examsList = [];
+
 async function renderExams() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
   try {
-    const res = await api.get('/exams');
+    const res = await api.get('/exams', { campus: activeCampus });
     const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-    if (data.length > 0) {
+    if (Array.isArray(data)) {
       examsList = data;
+    } else {
+      examsList = isMain ? defaultExamsList : [];
     }
   } catch {
-    // fallback to default examsList
+    examsList = isMain ? defaultExamsList : [];
   }
 
   return `
@@ -65,8 +71,15 @@ async function renderExams() {
 }
 
 function renderExamsRows(list) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   if (!list || list.length === 0) {
-    return `<tr><td colspan="6" class="text-center p-6 text-secondary">No examinations scheduled yet. Click "+ Schedule New Exam" to create one.</td></tr>`;
+    return `<tr><td colspan="6" class="text-center p-8 text-secondary">
+      <div style="padding: 24px 12px;">
+        <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">🏛️</span>
+        <strong style="color: var(--text-primary); font-size: 1.05rem;">No examinations scheduled for ${activeCampus} (0 data)</strong>
+        <p class="text-xs text-secondary mt-1">Click <strong>"+ Schedule New Exam"</strong> above to schedule an exam for this school.</p>
+      </div>
+    </td></tr>`;
   }
 
   return list.map(e => `
@@ -143,8 +156,11 @@ function bindExamsEvents() {
             return false;
           }
 
+          const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+
           try {
             const res = await api.post('/exams/store', {
+              campus: activeCampus,
               name,
               type,
               term,
@@ -157,6 +173,7 @@ function bindExamsEvents() {
             const newId = res.data?.id || (examsList.length + 1);
             examsList.unshift({
               id: newId,
+              campus: activeCampus,
               name,
               type,
               term,
@@ -186,6 +203,8 @@ function bindExamsEvents() {
 let allMarksStudents = [];
 let currentMarksList = [];
 let currentExamsForMarks = [];
+let marksClassesMap = {}; // id -> name
+let marksClassesList = []; // [{id, name}]
 
 function calculateGrade(m, max = 100) {
   const pct = (m / max) * 100;
@@ -197,6 +216,22 @@ function calculateGrade(m, max = 100) {
   return { grade: 'F (Fail)', badge: 'badge-danger' };
 }
 
+// Normalize class_id -> display class name using the classes map
+function resolveClassName(classId, fallback) {
+  if (!classId) return fallback || 'Class 10';
+  const cid = String(classId);
+  // If it already looks like a name (contains letters beyond just digits)
+  if (/[a-zA-Z]/.test(cid)) {
+    // Check if it matches any class name in map
+    const found = marksClassesList.find(c => c.name.toLowerCase() === cid.toLowerCase());
+    return found ? found.name : cid;
+  }
+  // Numeric id lookup
+  if (marksClassesMap[cid]) return marksClassesMap[cid];
+  if (marksClassesMap[parseInt(cid, 10)]) return marksClassesMap[parseInt(cid, 10)];
+  return fallback || `Class ${cid}`;
+}
+
 async function renderMarksEntry() {
   const hash = window.location.hash || '';
   let selectedExamId = '1';
@@ -205,38 +240,51 @@ async function renderMarksEntry() {
   }
 
   try {
-    const [eRes, sRes] = await Promise.all([
+    const [eRes, sRes, cRes] = await Promise.all([
       api.get('/exams').catch(() => ({ data: [] })),
       api.get('/students').catch(() => ({ data: [] })),
+      api.get('/school-classes').catch(() => ({ data: [] })),
     ]);
 
     const eData = Array.isArray(eRes.data) ? eRes.data : (eRes.data?.data || []);
     const sData = Array.isArray(sRes.data) ? sRes.data : (sRes.data?.data || []);
+    const cData = Array.isArray(cRes.data) ? cRes.data : (cRes.data?.data || []);
+
+    // Build classes map: id -> name, and also store list
+    marksClassesMap = {};
+    marksClassesList = cData.length > 0 ? cData : [
+      { id: 4, name: 'Class 1' }, { id: 5, name: 'Class 5' }, { id: 6, name: 'Class 8' },
+      { id: 7, name: 'Class 10' }, { id: 8, name: 'Class 11' }, { id: 9, name: 'Class 12' },
+    ];
+    marksClassesList.forEach(c => {
+      marksClassesMap[String(c.id)] = c.name;
+      marksClassesMap[c.name] = c.name; // name -> name (identity lookup)
+    });
 
     currentExamsForMarks = eData.length > 0 ? eData : examsList;
 
     if (sData.length > 0) {
-      allMarksStudents = sData.map((s, idx) => ({
-        student_id: s.id,
-        roll: s.roll_no || (idx + 1),
-        admission_no: s.admission_no || `SS2025${String(idx + 1).padStart(3, '0')}`,
-        name: ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || `Student ${idx + 1}`,
-        class_id: s.class_id,
-        class_name: s.class || s.class_name || 'Class 10',
-        section: s.section || 'A',
-        marks: 80 + ((idx * 3) % 18),
-        max_marks: 100,
-      }));
+      allMarksStudents = sData.map((s, idx) => {
+        const resolvedClass = resolveClassName(s.class_id, 'Class 10');
+        return {
+          student_id: s.id,
+          roll: s.roll_no || (idx + 1),
+          admission_no: s.admission_no || `SS2025${String(idx + 1).padStart(3, '0')}`,
+          name: ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || `Student ${idx + 1}`,
+          class_id: s.class_id,
+          class_name: resolvedClass,
+          section: s.section_id || s.section || 'A',
+          marks: 80 + ((idx * 3) % 18),
+          max_marks: 100,
+        };
+      });
     } else {
       allMarksStudents = [
-        { student_id: 1, roll: 1, admission_no: 'SS2025001', name: 'Aarav Sharma', class_id: 10, class_name: 'Class 10', marks: 88, max_marks: 100 },
-        { student_id: 2, roll: 2, admission_no: 'SS2025002', name: 'Priya Singh', class_id: 10, class_name: 'Class 10', marks: 95, max_marks: 100 },
-        { student_id: 3, roll: 3, admission_no: 'SS2025003', name: 'Rohan Patel', class_id: 10, class_name: 'Class 10', marks: 74, max_marks: 100 },
-        { student_id: 4, roll: 4, admission_no: 'SS2025004', name: 'Ananya Gupta', class_id: 9, class_name: 'Class 9', marks: 82, max_marks: 100 },
-        { student_id: 5, roll: 5, admission_no: 'SS2025005', name: 'Vikram Reddy', class_id: 9, class_name: 'Class 9', marks: 56, max_marks: 100 },
-        { student_id: 6, roll: 6, admission_no: 'SS2025006', name: 'Meera Nair', class_id: 8, class_name: 'Class 8', marks: 91, max_marks: 100 },
-        { student_id: 7, roll: 7, admission_no: 'SS2025007', name: 'Arjun Das', class_id: 7, class_name: 'Class 7', marks: 78, max_marks: 100 },
-        { student_id: 8, roll: 8, admission_no: 'SS2025008', name: 'Sanya Chopra', class_id: 6, class_name: 'Class 6', marks: 89, max_marks: 100 },
+        { student_id: 1, roll: 1, admission_no: 'SS2025001', name: 'Aarav Sharma', class_id: 'Class 10', class_name: 'Class 10', marks: 88, max_marks: 100 },
+        { student_id: 2, roll: 2, admission_no: 'SS2025002', name: 'Priya Singh', class_id: '11', class_name: 'Class 10 - Advanced Coding', marks: 95, max_marks: 100 },
+        { student_id: 3, roll: 3, admission_no: 'SS2025003', name: 'Rohan Patel', class_id: 'Class 10', class_name: 'Class 10', marks: 74, max_marks: 100 },
+        { student_id: 4, roll: 4, admission_no: 'SS2025004', name: 'Ananya Gupta', class_id: '12', class_name: 'Grade 11 Tech', marks: 82, max_marks: 100 },
+        { student_id: 5, roll: 5, admission_no: 'SS2025005', name: 'Vikram Reddy', class_id: '5', class_name: 'Class 5', marks: 56, max_marks: 100 },
       ];
     }
   } catch (err) {
@@ -244,6 +292,9 @@ async function renderMarksEntry() {
   }
 
   currentMarksList = [...allMarksStudents];
+
+  // Derive unique class options from actual student data + classes list
+  const classOptions = buildClassOptionsFromData();
 
   return `
     <div class="animate-fadeIn">
@@ -273,12 +324,7 @@ async function renderMarksEntry() {
             <label class="form-label">Class</label>
             <select class="form-select" id="marks-class-select">
               <option value="all">All Classes</option>
-              <option value="10">Class 10</option>
-              <option value="9">Class 9</option>
-              <option value="8">Class 8</option>
-              <option value="7">Class 7</option>
-              <option value="6">Class 6</option>
-              <option value="5">Class 5</option>
+              ${classOptions.map(c => `<option value="${c.value}">${c.label}</option>`).join('')}
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0;">
@@ -289,6 +335,11 @@ async function renderMarksEntry() {
               <option value="English Literature">English Literature</option>
               <option value="Computer Science">Computer Science & Python</option>
               <option value="Social Studies">Social Studies & History</option>
+              <option value="Physics">Physics</option>
+              <option value="Chemistry">Chemistry</option>
+              <option value="Biology">Biology</option>
+              <option value="Hindi">Hindi</option>
+              <option value="General">General</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0;">
@@ -358,6 +409,32 @@ function renderMarksRows(items) {
   }).join('');
 }
 
+// Build unique class options from loaded student data & classes list
+function buildClassOptionsFromData() {
+  const seen = new Set();
+  const options = [];
+
+  // First add from classes list (canonical order)
+  marksClassesList.forEach(c => {
+    const key = c.name;
+    if (!seen.has(key)) {
+      seen.add(key);
+      options.push({ value: c.name, label: c.name });
+    }
+  });
+
+  // Then add any class_names from students not in the list
+  allMarksStudents.forEach(s => {
+    const key = s.class_name;
+    if (!seen.has(key)) {
+      seen.add(key);
+      options.push({ value: key, label: key });
+    }
+  });
+
+  return options;
+}
+
 function bindMarksEntryEvents() {
   function bindInputs() {
     document.querySelectorAll('.marks-val-input').forEach(input => {
@@ -389,8 +466,10 @@ function bindMarksEntryEvents() {
       if (cls === 'all') {
         currentMarksList = [...allMarksStudents];
       } else {
+        // Match by class_name (exact) - since options are class names now
         currentMarksList = allMarksStudents.filter(s =>
-          String(s.class_id) === cls || String(s.class_name).includes(cls)
+          s.class_name === cls ||
+          s.class_name.toLowerCase() === cls.toLowerCase()
         );
       }
       const tbody = document.getElementById('marks-tbody');

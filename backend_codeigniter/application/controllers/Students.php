@@ -11,12 +11,16 @@ class Students extends REST_Controller {
     public function index(): void {
         $search = $this->input->get('search');
         $class_id = $this->input->get('class_id');
-        $students = $this->student_model->get_all($search, $class_id);
+        $campus = $this->get_active_campus();
+        $students = $this->student_model->get_all($search, $class_id, $campus);
         $this->response($students);
     }
 
     public function store(): void {
         $payload = $this->get_payload();
+        if (empty($payload['campus'])) {
+            $payload['campus'] = $this->get_active_campus();
+        }
 
         // 1. Server-Side Boundary & Null/Empty Validation
         $firstName = trim($payload['first_name'] ?? '');

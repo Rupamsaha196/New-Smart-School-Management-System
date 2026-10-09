@@ -3,15 +3,26 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Exam_model extends CI_Model {
 
-    public function get_exams(): array {
+    public function get_exams(?string $campus = null): array {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         return $this->db->get('exams')->result_array();
     }
 
     public function create_exam(array $data): int {
+        $campus = $data['campus'] ?? 'Kolkata Main Campus (Salt Lake Sector V)';
         $this->db->insert('exams', [
             'name'        => $data['name'] ?? 'Term Exam',
             'term'        => $data['term'] ?? 'Term 1',
             'session'     => $data['session'] ?? '2025-26',
+            'campus'      => $campus,
             'start_date'  => $data['start_date'] ?? date('Y-m-d'),
             'end_date'    => $data['end_date'] ?? date('Y-m-d', strtotime('+7 days')),
             'status'      => $data['status'] ?? 'Scheduled',

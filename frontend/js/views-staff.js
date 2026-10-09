@@ -6,23 +6,30 @@
 /* ==========================================================================
    Staff Directory View
    ========================================================================== */
-let staffMembers = [
-  { id: 1, staff_id: 'EMP1001', name: 'Dr. Vivek Saxena', role: 'Principal / HOD Science', department: 'Academics', phone: '9811223344', email: 'principal@smartschool.com', status: 'Active' },
-  { id: 2, staff_id: 'EMP1002', name: 'Mrs. Anjali Deshmukh', role: 'Senior Teacher', department: 'Mathematics', phone: '9822334455', email: 'anjali.d@smartschool.com', status: 'Active' },
-  { id: 3, staff_id: 'EMP1003', name: 'Mr. Arvind Roy', role: 'Faculty IT & Robotics', department: 'Computer Science', phone: '9833445566', email: 'arvind.roy@smartschool.com', status: 'Active' },
-  { id: 4, staff_id: 'EMP1004', name: 'Mr. Suresh Kumar', role: 'Accountant & Bursar', department: 'Finance & Accounts', phone: '9844556677', email: 'bursar@smartschool.com', status: 'Active' },
-  { id: 5, staff_id: 'EMP1005', name: 'Mrs. Neha Kapoor', role: 'Primary Coordinator', department: 'Primary Wing', phone: '9855667788', email: 'neha.k@smartschool.com', status: 'Active' },
-  { id: 6, staff_id: 'EMP1006', name: 'Mr. Ramesh Shinde', role: 'Head Librarian', department: 'Library', phone: '9866778899', email: 'library@smartschool.com', status: 'Active' },
+const defaultDemoStaff = [
+  { id: 1, staff_id: 'EMP1001', name: 'Dr. Vivek Saxena', role: 'Principal / HOD Science', department: 'Academics', phone: '9811223344', email: 'principal@smartschool.com', status: 'Active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 2, staff_id: 'EMP1002', name: 'Mrs. Anjali Deshmukh', role: 'Senior Teacher', department: 'Mathematics', phone: '9822334455', email: 'anjali.d@smartschool.com', status: 'Active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 3, staff_id: 'EMP1003', name: 'Mr. Arvind Roy', role: 'Faculty IT & Robotics', department: 'Computer Science', phone: '9833445566', email: 'arvind.roy@smartschool.com', status: 'Active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 4, staff_id: 'EMP1004', name: 'Mr. Suresh Kumar', role: 'Accountant & Bursar', department: 'Finance & Accounts', phone: '9844556677', email: 'bursar@smartschool.com', status: 'Active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 5, staff_id: 'EMP1005', name: 'Mrs. Neha Kapoor', role: 'Primary Coordinator', department: 'Primary Wing', phone: '9855667788', email: 'neha.k@smartschool.com', status: 'Active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
+  { id: 6, staff_id: 'EMP1006', name: 'Mr. Ramesh Shinde', role: 'Head Librarian', department: 'Library', phone: '9866778899', email: 'library@smartschool.com', status: 'Active', campus: 'Kolkata Main Campus (Salt Lake Sector V)' },
 ];
 
+let staffMembers = [];
+
 async function renderStaff() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
+
   try {
-    const res = await api.get('/staff');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    const res = await api.get('/staff', { campus: activeCampus });
+    if (Array.isArray(res.data)) {
       staffMembers = res.data;
+    } else {
+      staffMembers = isMain ? defaultDemoStaff : [];
     }
   } catch {
-    // fallback
+    staffMembers = isMain ? defaultDemoStaff : [];
   }
 
   return `
@@ -55,7 +62,15 @@ async function renderStaff() {
             </tr>
           </thead>
           <tbody id="staff-tbody">
-            ${staffMembers.map(s => {
+            ${staffMembers.length === 0 ? `
+              <tr><td colspan="6" class="text-center p-8 text-secondary">
+                <div style="padding: 24px 12px;">
+                  <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">🏛️</span>
+                  <strong style="color: var(--text-primary); font-size: 1.05rem;">No staff or faculty members registered for ${activeCampus} (0 data)</strong>
+                  <p class="text-xs text-secondary mt-1">Click <strong>"Add Staff Member"</strong> above to register faculty for this school.</p>
+                </div>
+              </td></tr>
+            ` : staffMembers.map(s => {
               const initials = (s.name || 'Staff').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
               return `
                 <tr>
@@ -151,8 +166,11 @@ function bindStaffEvents() {
           const salary = parseFloat(document.getElementById('modal-staff-salary').value) || 50000;
           const genEmpId = `EMP${Math.floor(1000 + Math.random() * 9000)}`;
 
+          const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+
           const newStaff = {
             id: Date.now(),
+            campus: activeCampus,
             emp_id: genEmpId,
             staff_id: genEmpId,
             name,
@@ -203,6 +221,12 @@ let staffAttList = [
 ];
 
 async function renderStaffAttendance() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
+  const currentStaffList = staffMembers.length > 0 ? staffMembers : (isMain ? staffAttList : []);
+  const activeCount = currentStaffList.filter(s => (s.status || 'Present') === 'Present').length;
+  const leaveCount = currentStaffList.filter(s => s.status === 'On Leave').length;
+
   return `
     <div class="animate-fadeIn">
       <div class="page-header">
@@ -223,12 +247,12 @@ async function renderStaffAttendance() {
       <div class="grid-3 mb-6">
         <div class="stat-card stat-success">
           <div class="stat-icon">${icon('checkCircle', 24)}</div>
-          <div class="stat-value">5 / 6</div>
+          <div class="stat-value">${activeCount} / ${currentStaffList.length}</div>
           <div class="stat-label">Faculty On Campus Today</div>
         </div>
         <div class="stat-card stat-warning">
           <div class="stat-icon">${icon('calendar', 24)}</div>
-          <div class="stat-value">1 Staff</div>
+          <div class="stat-value">${leaveCount} Staff</div>
           <div class="stat-label">Approved Medical / Casual Leave</div>
         </div>
         <div class="stat-card stat-primary">
@@ -250,15 +274,22 @@ async function renderStaffAttendance() {
             </tr>
           </thead>
           <tbody id="staff-att-tbody">
-            ${staffAttList.map(s => `
+            ${currentStaffList.length === 0 ? `
+              <tr><td colspan="5" class="text-center p-8 text-secondary">
+                <div style="padding: 24px 12px;">
+                  <span style="font-size: 2rem; display: block; margin-bottom: 8px;">🏛️</span>
+                  <strong style="color: var(--text-primary);">No staff members enrolled in ${activeCampus} to record attendance.</strong>
+                </div>
+              </td></tr>
+            ` : currentStaffList.map(s => `
               <tr>
                 <td><strong>${s.name}</strong></td>
-                <td class="text-secondary">${s.role}</td>
-                <td><strong style="color: var(--primary-600);">${s.in_time}</strong></td>
-                <td class="text-secondary">${s.out_time}</td>
+                <td class="text-secondary">${s.role || s.designation || 'Teacher'}</td>
+                <td><strong style="color: var(--primary-600);">${s.in_time || '08:30 AM'}</strong></td>
+                <td class="text-secondary">${s.out_time || '—'}</td>
                 <td>
-                  <span class="badge ${s.status === 'Present' ? 'badge-success' : 'badge-warning'}">
-                    ${s.status}
+                  <span class="badge ${(s.status || 'Present') === 'Present' ? 'badge-success' : 'badge-warning'}">
+                    ${s.status || 'Present'}
                   </span>
                 </td>
               </tr>

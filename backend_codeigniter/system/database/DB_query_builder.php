@@ -88,10 +88,20 @@ class CI_DB_query_builder {
         return '`' . trim($field, '`') . '`';
     }
 
-    public function where($key, $val = NULL): self {
+    public function where($key, $val = NULL, $escape = NULL): self {
         if (is_array($key)) {
             foreach ($key as $k => $v) {
                 $this->where($k, $v);
+            }
+            return $this;
+        }
+
+        if ($val === NULL && ($escape === FALSE || func_num_args() === 1 || strpos($key, '(') !== false || stripos($key, 'IS NULL') !== false || stripos($key, 'IS NOT NULL') !== false)) {
+            $clause = $key;
+            if (empty($this->where_clauses)) {
+                $this->where_clauses[] = $clause;
+            } else {
+                $this->where_clauses[] = "AND " . $clause;
             }
             return $this;
         }
@@ -108,7 +118,17 @@ class CI_DB_query_builder {
         return $this;
     }
 
-    public function or_where($key, $val = NULL): self {
+    public function or_where($key, $val = NULL, $escape = NULL): self {
+        if ($val === NULL && ($escape === FALSE || func_num_args() === 1 || strpos($key, '(') !== false || stripos($key, 'IS NULL') !== false || stripos($key, 'IS NOT NULL') !== false)) {
+            $clause = $key;
+            if (empty($this->where_clauses)) {
+                $this->where_clauses[] = $clause;
+            } else {
+                $this->where_clauses[] = "OR " . $clause;
+            }
+            return $this;
+        }
+
         $param_key = ':or_' . count($this->bind_params) . '_' . preg_replace('/[^a-zA-Z0-9_]/', '', $key);
         $clause = strpos($key, ' ') !== false ? "{$key} {$param_key}" : $this->escape_col($key) . " = {$param_key}";
 
@@ -118,6 +138,29 @@ class CI_DB_query_builder {
             $this->where_clauses[] = "OR " . $clause;
         }
         $this->bind_params[$param_key] = $val;
+        return $this;
+    }
+
+    public function group_start(): self {
+        if (empty($this->where_clauses)) {
+            $this->where_clauses[] = "(";
+        } else {
+            $this->where_clauses[] = "AND (";
+        }
+        return $this;
+    }
+
+    public function or_group_start(): self {
+        if (empty($this->where_clauses)) {
+            $this->where_clauses[] = "(";
+        } else {
+            $this->where_clauses[] = "OR (";
+        }
+        return $this;
+    }
+
+    public function group_end(): self {
+        $this->where_clauses[] = ")";
         return $this;
     }
 
@@ -350,5 +393,69 @@ class CI_DB_query_builder {
         } finally {
             $this->reset_query();
         }
+    }
+
+    public function escape_str(string $str, bool $like = FALSE): string {
+        $str = str_replace("'", "''", $str);
+        if ($like === TRUE) {
+            return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $str);
+        }
+        return $str;
+    }
+
+    public function escape_like_str(string $str): string {
+        return $this->escape_str($str, TRUE);
+    }
+
+    public function escape($str): string {
+        if (is_string($str)) {
+            return "'" . $this->escape_str($str) . "'";
+        } elseif (is_bool($str)) {
+            return ($str === FALSE) ? '0' : '1';
+        } elseif ($str === NULL) {
+            return 'NULL';
+        }
+        return (string)$str;
+    }
+
+    protected bool $trans_status = true;
+
+    public function trans_begin(bool $test_mode = false): bool {
+        $this->trans_status = true;
+        if (!$this->pdo->inTransaction()) {
+            return $this->pdo->beginTransaction();
+        }
+        return true;
+    }
+
+    public function trans_start(bool $test_mode = false): bool {
+        return $this->trans_begin($test_mode);
+    }
+
+    public function trans_complete(): bool {
+        if ($this->trans_status === false) {
+            $this->trans_rollback();
+            return false;
+        }
+        return $this->trans_commit();
+    }
+
+    public function trans_status(): bool {
+        return $this->trans_status;
+    }
+
+    public function trans_commit(): bool {
+        if ($this->pdo->inTransaction()) {
+            return $this->pdo->commit();
+        }
+        return true;
+    }
+
+    public function trans_rollback(): bool {
+        $this->trans_status = false;
+        if ($this->pdo->inTransaction()) {
+            return $this->pdo->rollBack();
+        }
+        return true;
     }
 }

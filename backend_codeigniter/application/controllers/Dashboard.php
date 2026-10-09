@@ -55,15 +55,28 @@ class Dashboard extends REST_Controller {
        SUPER ADMIN / ADMIN DASHBOARD
        =========================== */
     private function _admin_dashboard(array $ctx): void {
+        $campus = $this->get_active_campus();
+
         // 1. Core Counts from DB
+        $this->apply_campus_filter('', $campus);
         $total_students = (int)$this->db->count_all_results('students');
+
+        $this->apply_campus_filter('', $campus);
         $total_staff    = (int)$this->db->count_all_results('staff');
+
+        $this->apply_campus_filter('', $campus);
         $total_classes  = (int)$this->db->count_all_results('school_classes');
+
+        $this->apply_campus_filter('', $campus);
         $total_exams    = (int)$this->db->count_all_results('exams');
+
+        $this->apply_campus_filter('', $campus);
         $total_teachers = (int)$this->db->where('role', 'Teacher')->count_all_results('staff');
+
         $total_parents  = (int)$this->db->where('role', 'parent')->count_all_results('users');
 
         // 2. Fees Analytics from DB
+        $this->apply_campus_filter('', $campus);
         $fees_summary = $this->db->select("
             COALESCE(SUM(paid), 0) as collected,
             COALESCE(SUM(amount), 0) as total,
@@ -76,20 +89,20 @@ class Dashboard extends REST_Controller {
 
         // Fees for current month
         $current_month = date('F');
-        $fees_month_row = $this->db->query("
-            SELECT COALESCE(SUM(paid), 0) as m_paid
-            FROM student_fees
-            WHERE month LIKE '%{$current_month}%' OR MONTH(date) = MONTH(CURRENT_DATE())
-        ")->row_array();
+        $this->apply_campus_filter('', $campus);
+        $fees_month_row = $this->db->select("COALESCE(SUM(paid), 0) as m_paid")
+            ->where("(month LIKE '%" . $this->db->escape_like_str($current_month) . "%' OR MONTH(date) = MONTH(CURRENT_DATE()))", null, false)
+            ->get('student_fees')->row_array();
         $fees_this_month = (float)($fees_month_row['m_paid'] ?? 0);
-        if ($fees_this_month <= 0) {
+        if ($fees_this_month <= 0 && $fees_collected > 0) {
             $fees_this_month = $fees_collected;
         }
 
         // 3. Attendance Analytics from DB
         $this->load->model('Attendance_model', 'att');
-        $att_stats = $this->att->daily_stats();
+        $att_stats = $this->att->daily_stats(null, $campus);
 
+        $this->apply_campus_filter('', $campus);
         $overall_att = $this->db->select("
             COUNT(*) as total_records,
             SUM(CASE WHEN status IN ('Present', 'Late') THEN 1 ELSE 0 END) as present
@@ -99,6 +112,7 @@ class Dashboard extends REST_Controller {
             ? round(($overall_att['present'] / $overall_att['total_records']) * 100, 1)
             : 0.0;
 
+        $this->apply_campus_filter('', $campus);
         $today_records_count = (int)$this->db->where('date', date('Y-m-d'))->count_all_results('attendances');
         if ($today_records_count > 0 && !empty($att_stats['total'])) {
             $attendance_rate = (float)$att_stats['rate'];
@@ -111,6 +125,7 @@ class Dashboard extends REST_Controller {
         for ($i = 4; $i >= 0; $i--) {
             $d = date('Y-m-d', strtotime("-$i days"));
             $day_name = date('D', strtotime($d));
+            $this->apply_campus_filter('', $campus);
             $row = $this->db->select("
                 COUNT(*) as total,
                 SUM(CASE WHEN status IN ('Present', 'Late') THEN 1 ELSE 0 END) as present
@@ -130,17 +145,17 @@ class Dashboard extends REST_Controller {
         }
 
         // 5. Real Monthly Fee Collections vs Target from DB
-        $month_rows = $this->db->query("
-            SELECT
-                COALESCE(month, DATE_FORMAT(date, '%M')) as m_name,
-                SUM(paid) as collected,
-                SUM(amount) as target
-            FROM student_fees
-            WHERE paid > 0 OR amount > 0
-            GROUP BY m_name
-            ORDER BY MIN(created_at) ASC
-            LIMIT 6
-        ")->result_array();
+        $this->apply_campus_filter('', $campus);
+        $month_rows = $this->db->select("
+            COALESCE(month, DATE_FORMAT(date, '%M')) as m_name,
+            SUM(paid) as collected,
+            SUM(amount) as target
+        ")
+        ->where('(paid > 0 OR amount > 0)', null, false)
+        ->group_by('m_name')
+        ->order_by('MIN(created_at)', 'ASC')
+        ->limit(6)
+        ->get('student_fees')->result_array();
 
         $monthly_fees = [];
         foreach ($month_rows as $mr) {
@@ -162,6 +177,7 @@ class Dashboard extends REST_Controller {
         // 6. Real Recent Activity Feed from DB
         $recent_activities = [];
 
+        $this->apply_campus_filter('', $campus);
         $recent_students = $this->db->select('id, first_name, last_name, admission_no, created_at')
             ->order_by('created_at', 'DESC')
             ->limit(3)
@@ -178,14 +194,13 @@ class Dashboard extends REST_Controller {
             ];
         }
 
-        $recent_fees = $this->db->query("
-            SELECT sf.id, sf.paid, sf.type, sf.receipt_no, sf.created_at, s.first_name, s.last_name
-            FROM student_fees sf
-            LEFT JOIN students s ON s.id = sf.student_id
-            WHERE sf.paid > 0
-            ORDER BY sf.created_at DESC
-            LIMIT 3
-        ")->result_array();
+        $this->apply_campus_filter('sf', $campus);
+        $recent_fees = $this->db->select('sf.id, sf.paid, sf.type, sf.receipt_no, sf.created_at, s.first_name, s.last_name')
+            ->join('students s', 's.id = sf.student_id', 'left')
+            ->where('sf.paid > 0', null, false)
+            ->order_by('sf.created_at', 'DESC')
+            ->limit(3)
+            ->get('student_fees sf')->result_array();
         foreach ($recent_fees as $rf) {
             $s_name = trim(($rf['first_name'] ?? '') . ' ' . ($rf['last_name'] ?? '')) ?: 'Student';
             $recent_activities[] = [
@@ -204,17 +219,20 @@ class Dashboard extends REST_Controller {
         $recent_activities = array_slice($recent_activities, 0, 5);
 
         // 7. Recent Notices
+        $this->apply_campus_filter('', $campus);
         $recent_notices = $this->db->order_by('created_at', 'DESC')->limit(5)->get('notices')->result_array();
 
         // 8. Staff breakdown by role/dept
+        $this->apply_campus_filter('', $campus);
         $staff_by_dept = $this->db->select('department, COUNT(*) as cnt')
             ->group_by('department')
             ->get('staff')->result_array();
 
-        // 8. Admission Inquiries Analytics
+        // 9. Admission Inquiries Analytics
         $total_inquiries = 0;
         $new_inquiries = 0;
         try {
+            $this->apply_campus_filter('', $campus);
             $inq_row = $this->db->select("
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as count_new

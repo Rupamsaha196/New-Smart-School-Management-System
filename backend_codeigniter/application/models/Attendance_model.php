@@ -3,10 +3,26 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Attendance_model extends CI_Model {
 
-    public function daily_stats(?string $date = null): array {
+    public function daily_stats(?string $date = null, ?string $campus = null): array {
         $target_date = $date ?: date('Y-m-d');
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         $records = $this->db->where('date', $target_date)->get('attendances')->result_array();
 
+        if ($campus !== null) {
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
         $total_students = $this->db->count_all_results('students');
         $present = count(array_filter($records, fn($r) => in_array($r['status'] ?? '', ['Present', 'Late'])));
         $absent  = count(array_filter($records, fn($r) => ($r['status'] ?? '') === 'Absent'));
@@ -20,8 +36,9 @@ class Attendance_model extends CI_Model {
         ];
     }
 
-    public function bulk_mark(string $date, array $records, ?int $class_id = null): int {
+    public function bulk_mark(string $date, array $records, ?int $class_id = null, ?string $campus = null): int {
         $count = 0;
+        $campus_val = $campus ?: 'Kolkata Main Campus (Salt Lake Sector V)';
         foreach ($records as $r) {
             $student_id = $r['student_id'] ?? null;
             if (!$student_id) continue;
@@ -33,6 +50,7 @@ class Attendance_model extends CI_Model {
                 $this->db->update('attendances', [
                     'status'     => $status,
                     'remark'     => $r['remark'] ?? null,
+                    'campus'     => $campus_val,
                     'updated_at' => date('Y-m-d H:i:s'),
                 ], ['id' => $existing['id']]);
             } else {
@@ -42,6 +60,7 @@ class Attendance_model extends CI_Model {
                     'date'       => $date,
                     'status'     => $status,
                     'remark'     => $r['remark'] ?? null,
+                    'campus'     => $campus_val,
                     'created_at' => date('Y-m-d H:i:s'),
                     'updated_at' => date('Y-m-d H:i:s'),
                 ]);

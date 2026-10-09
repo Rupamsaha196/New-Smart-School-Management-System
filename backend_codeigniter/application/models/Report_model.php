@@ -16,16 +16,30 @@ class Report_model extends CI_Model {
         return $class_id ?: 'Class 10';
     }
 
+    private function apply_campus(?string $campus): void {
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(campus = '{$main_name}' OR campus = 'Kolkata Main' OR campus LIKE '%Kolkata Main%' OR campus IS NULL OR campus = '')", null, false);
+            } else {
+                $this->db->where('campus', $campus);
+            }
+        }
+    }
+
     /**
      * 1. Student Information Report: Real day-to-day student records and demographic breakdown
      */
-    public function generate_student_report(): array {
+    public function generate_student_report(?string $campus = null): array {
+        $this->apply_campus($campus);
         $classes = $this->db->get('school_classes')->result_array();
         $classes_map = [];
         foreach ($classes as $c) {
             $classes_map[$c['id']] = $c['name'];
         }
 
+        $this->apply_campus($campus);
         $students = $this->db->order_by('id', 'ASC')->get('students')->result_array();
         $total = count($students);
 
@@ -37,6 +51,7 @@ class Report_model extends CI_Model {
         $sc_count = 0;
 
         // Preload student fees for fee_status
+        $this->apply_campus($campus);
         $fees = $this->db->get('student_fees')->result_array();
         $fees_by_student = [];
         foreach ($fees as $f) {
@@ -172,11 +187,13 @@ class Report_model extends CI_Model {
     /**
      * 2. Financial Ledger Report: Real transactions & fees collected
      */
-    public function generate_financial_report(): array {
+    public function generate_financial_report(?string $campus = null): array {
+        $this->apply_campus($campus);
         $fees = $this->db->get('student_fees')->result_array();
         $total_due = (float)array_sum(array_column($fees, 'amount'));
         $total_collected = (float)array_sum(array_column($fees, 'paid'));
 
+        $this->apply_campus($campus);
         $txns = $this->db->order_by('date', 'DESC')->order_by('id', 'DESC')->get('transactions')->result_array();
 
         $income_txns = array_filter($txns, fn($t) => $t['type'] === 'Income');
@@ -231,7 +248,8 @@ class Report_model extends CI_Model {
     /**
      * 3. Attendance Compliance Report: Real day-to-day student attendances
      */
-    public function generate_attendance_report(): array {
+    public function generate_attendance_report(?string $campus = null): array {
+        $this->apply_campus($campus);
         $classes = $this->db->get('school_classes')->result_array();
         $classes_map = [];
         foreach ($classes as $c) {
@@ -242,6 +260,15 @@ class Report_model extends CI_Model {
         $this->db->select('attendances.*, students.first_name, students.last_name, students.admission_no, students.class_id, students.section_id');
         $this->db->from('attendances');
         $this->db->join('students', 'students.id = attendances.student_id', 'inner');
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(attendances.campus = '{$main_name}' OR attendances.campus = 'Kolkata Main' OR attendances.campus IS NULL OR attendances.campus = '')", null, false);
+            } else {
+                $this->db->where('attendances.campus', $campus);
+            }
+        }
         $this->db->order_by('attendances.date', 'DESC');
         $this->db->order_by('attendances.id', 'DESC');
         $att_rows = $this->db->get()->result_array();
@@ -338,19 +365,30 @@ class Report_model extends CI_Model {
     /**
      * 4. Examination Report: Real day-to-day exam results & scorecards
      */
-    public function generate_exam_report(): array {
+    public function generate_exam_report(?string $campus = null): array {
+        $this->apply_campus($campus);
         $classes = $this->db->get('school_classes')->result_array();
         $classes_map = [];
         foreach ($classes as $c) {
             $classes_map[$c['id']] = $c['name'];
         }
 
+        $this->apply_campus($campus);
         $exams = $this->db->get('exams')->result_array();
 
         // Query all real exam results joined with students
         $this->db->select('exam_results.*, students.first_name, students.last_name, students.admission_no, students.class_id, students.section_id');
         $this->db->from('exam_results');
         $this->db->join('students', 'students.id = exam_results.student_id', 'inner');
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(students.campus = '{$main_name}' OR students.campus = 'Kolkata Main' OR students.campus IS NULL OR students.campus = '')", null, false);
+            } else {
+                $this->db->where('students.campus', $campus);
+            }
+        }
         $this->db->order_by('exam_results.id', 'DESC');
         $marks = $this->db->get()->result_array();
 
@@ -443,7 +481,8 @@ class Report_model extends CI_Model {
     /**
      * 5. Behavior Records Report: Real day-to-day student conduct and merit/demerit incidents
      */
-    public function generate_behavior_report(): array {
+    public function generate_behavior_report(?string $campus = null): array {
+        $this->apply_campus($campus);
         $classes = $this->db->get('school_classes')->result_array();
         $classes_map = [];
         foreach ($classes as $c) {
@@ -454,6 +493,15 @@ class Report_model extends CI_Model {
         $this->db->from('student_notes');
         $this->db->join('students', 'students.id = student_notes.student_id', 'inner');
         $this->db->join('users', 'users.id = student_notes.added_by', 'left');
+        if ($campus !== null) {
+            $main_name = 'Kolkata Main Campus (Salt Lake Sector V)';
+            $is_main = empty($campus) || stripos($campus, 'kolkata main') !== false || stripos($campus, 'salt lake') !== false || strtolower(trim($campus)) === 'main';
+            if ($is_main) {
+                $this->db->where("(students.campus = '{$main_name}' OR students.campus = 'Kolkata Main' OR students.campus IS NULL OR students.campus = '')", null, false);
+            } else {
+                $this->db->where('students.campus', $campus);
+            }
+        }
         $this->db->order_by('student_notes.id', 'DESC');
         $notes = $this->db->get()->result_array();
 

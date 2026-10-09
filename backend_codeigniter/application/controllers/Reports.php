@@ -12,11 +12,12 @@ class Reports extends REST_Controller {
      * Unified Executive Reports Hub (all 4 domains + behavior)
      */
     public function index(): void {
-        $student_rep  = $this->report_model->generate_student_report();
-        $finance_rep  = $this->report_model->generate_financial_report();
-        $att_rep      = $this->report_model->generate_attendance_report();
-        $exam_rep     = $this->report_model->generate_exam_report();
-        $behavior_rep = $this->report_model->generate_behavior_report();
+        $campus = $this->get_active_campus();
+        $student_rep  = $this->report_model->generate_student_report($campus);
+        $finance_rep  = $this->report_model->generate_financial_report($campus);
+        $att_rep      = $this->report_model->generate_attendance_report($campus);
+        $exam_rep     = $this->report_model->generate_exam_report($campus);
+        $behavior_rep = $this->report_model->generate_behavior_report($campus);
 
         $this->response([
             'student_report'    => $student_rep,
@@ -24,24 +25,29 @@ class Reports extends REST_Controller {
             'attendance_report' => $att_rep,
             'exam_report'       => $exam_rep,
             'behavior_report'   => $behavior_rep,
+            'campus'            => $campus,
             'generated_at'      => date('Y-m-d H:i:s'),
         ]);
     }
 
     public function student(): void {
-        $this->response($this->report_model->generate_student_report());
+        $campus = $this->get_active_campus();
+        $this->response($this->report_model->generate_student_report($campus));
     }
 
     public function finance(): void {
-        $this->response($this->report_model->generate_financial_report());
+        $campus = $this->get_active_campus();
+        $this->response($this->report_model->generate_financial_report($campus));
     }
 
     public function attendance(): void {
-        $this->response($this->report_model->generate_attendance_report());
+        $campus = $this->get_active_campus();
+        $this->response($this->report_model->generate_attendance_report($campus));
     }
 
     public function exams(): void {
-        $this->response($this->report_model->generate_exam_report());
+        $campus = $this->get_active_campus();
+        $this->response($this->report_model->generate_exam_report($campus));
     }
 
     public function behavior(): void {

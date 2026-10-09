@@ -969,15 +969,15 @@ async function renderStudentCredentials() {
   let studentsList = [];
   try {
     const res = await api.get('/students');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    if (Array.isArray(res.data)) {
       studentsList = res.data;
-    } else {
-      const local = localStorage.getItem('local_students');
-      studentsList = local ? JSON.parse(local) : (window.demoStudents || []);
+    } else if (typeof window.getLocalStudents === 'function') {
+      studentsList = window.getLocalStudents();
     }
   } catch {
-    const local = localStorage.getItem('local_students');
-    studentsList = local ? JSON.parse(local) : (window.demoStudents || []);
+    if (typeof window.getLocalStudents === 'function') {
+      studentsList = window.getLocalStudents();
+    }
   }
 
   const classes = [...new Set(studentsList.map(s => s.class_name || (s.class_id ? `Class ${s.class_id}` : 'Class 5')))].filter(Boolean).sort();

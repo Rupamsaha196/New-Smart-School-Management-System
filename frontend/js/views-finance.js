@@ -1493,9 +1493,10 @@ let transactions = [
 ];
 
 async function renderIncomeExpense() {
+  transactions = [];
   try {
     const res = await api.get('/transactions');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    if (Array.isArray(res.data)) {
       transactions = res.data.map(t => ({
         id: t.id,
         voucher_no: t.voucher_no || `VCH-${String(t.id).padStart(4, '0')}`,
@@ -1506,9 +1507,16 @@ async function renderIncomeExpense() {
         amount: parseFloat(t.amount) || 0,
         date: t.date || (t.created_at ? t.created_at.split(' ')[0] : '2026-09-28'),
       }));
+    } else if (Array.isArray(res)) {
+      transactions = res;
+    } else if (window.SS_STORE) {
+      transactions = window.SS_STORE.get('transactions') || [];
     }
   } catch (e) {
     console.warn('Transactions API sync fallback:', e);
+    if (window.SS_STORE) {
+      transactions = window.SS_STORE.get('transactions') || [];
+    }
   }
 
   const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
@@ -1571,6 +1579,9 @@ async function renderIncomeExpense() {
 }
 
 function renderTransactionRows(items) {
+  if (!items || items.length === 0) {
+    return `<tr><td colspan="6" class="text-center p-8 text-secondary">No transactions recorded for this institution yet. Click "Record Transaction" above.</td></tr>`;
+  }
   return items.map(t => `
     <tr>
       <td><code>${t.voucher_no}</code></td>

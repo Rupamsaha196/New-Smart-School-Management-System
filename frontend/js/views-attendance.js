@@ -11,12 +11,14 @@ let allAttendanceStudents = [];
 let attendanceClasses = [];
 
 async function renderAttendanceMark() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+  const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
   const todayStr = new Date().toISOString().split('T')[0];
   try {
     const [sRes, cRes, attRes] = await Promise.all([
-      api.get('/students').catch(() => ({ data: [] })),
-      api.get('/classes').catch(() => ({ data: [] })),
-      api.get('/attendance', { date: todayStr }).catch(() => ({ data: [] })),
+      api.get('/students', { campus: activeCampus }).catch(() => ({ data: [] })),
+      api.get('/classes', { campus: activeCampus }).catch(() => ({ data: [] })),
+      api.get('/attendance', { date: todayStr, campus: activeCampus }).catch(() => ({ data: [] })),
     ]);
 
     const sData = Array.isArray(sRes.data) ? sRes.data : (sRes.data?.data || []);
@@ -26,14 +28,15 @@ async function renderAttendanceMark() {
     // Check localStorage cache for today
     let localCache = [];
     try {
-      const localCacheStr = localStorage.getItem('smart_school_daily_att_' + todayStr);
+      const cacheKey = isMain ? ('smart_school_daily_att_' + todayStr) : ('smart_school_daily_att_' + encodeURIComponent(activeCampus) + '_' + todayStr);
+      const localCacheStr = localStorage.getItem(cacheKey);
       if (localCacheStr) localCache = JSON.parse(localCacheStr) || [];
     } catch {}
 
     if (cData.length > 0) {
       attendanceClasses = cData;
     } else {
-      attendanceClasses = [
+      attendanceClasses = isMain ? [
         { id: 1, name: 'Class 1' },
         { id: 5, name: 'Class 5' },
         { id: 6, name: 'Class 6' },
@@ -41,7 +44,7 @@ async function renderAttendanceMark() {
         { id: 8, name: 'Class 8' },
         { id: 9, name: 'Class 9' },
         { id: 10, name: 'Class 10' },
-      ];
+      ] : [];
     }
 
     if (sData.length > 0) {
@@ -67,7 +70,7 @@ async function renderAttendanceMark() {
         };
       });
     } else {
-      allAttendanceStudents = [
+      allAttendanceStudents = isMain ? [
         { id: 1, admission_no: 'SS2025001', name: 'Aarav Sharma', roll_no: 1, class_id: 10, class_name: 'Class 10', section: 'A', status: 'Present' },
         { id: 2, admission_no: 'SS2025002', name: 'Priya Singh', roll_no: 2, class_id: 10, class_name: 'Class 10', section: 'A', status: 'Present' },
         { id: 3, admission_no: 'SS2025003', name: 'Rohan Patel', roll_no: 3, class_id: 10, class_name: 'Class 10', section: 'A', status: 'Present' },
@@ -76,7 +79,7 @@ async function renderAttendanceMark() {
         { id: 6, admission_no: 'SS2025006', name: 'Meera Nair', roll_no: 6, class_id: 8, class_name: 'Class 8', section: 'A', status: 'Present' },
         { id: 7, admission_no: 'SS2025007', name: 'Arjun Das', roll_no: 7, class_id: 7, class_name: 'Class 7', section: 'A', status: 'Present' },
         { id: 8, admission_no: 'SS2025008', name: 'Sanya Chopra', roll_no: 8, class_id: 6, class_name: 'Class 6', section: 'A', status: 'Present' },
-      ];
+      ] : [];
 
       allAttendanceStudents.forEach(st => {
         const fromDb = existingAtt.find(r => String(r.student_id) === String(st.id));
@@ -178,8 +181,15 @@ async function renderAttendanceMark() {
 }
 
 function renderAttendanceRows(list) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   if (!list || list.length === 0) {
-    return `<tr><td colspan="6" class="text-center p-6 text-secondary">No enrolled students found for selected filter.</td></tr>`;
+    return `<tr><td colspan="6" class="text-center p-8 text-secondary">
+      <div style="padding: 24px 12px;">
+        <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">🏛️</span>
+        <strong style="color: var(--text-primary); font-size: 1.05rem;">No students enrolled in ${activeCampus} to mark attendance (0 data)</strong>
+        <p class="text-xs text-secondary mt-1">Please enroll students in this school first via <strong>"New Admission"</strong>.</p>
+      </div>
+    </td></tr>`;
   }
 
   return list.map(s => {
@@ -224,9 +234,12 @@ function updateAttendanceCounters() {
 
 function bindAttendanceMarkEvents() {
   function persistAndSync(date, studentId, newStatus) {
+    const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+    const isMain = (typeof window.isMainCampus === 'function') ? window.isMainCampus(activeCampus) : true;
     // 1. Immediately save to localStorage
     try {
-      localStorage.setItem('smart_school_daily_att_' + date, JSON.stringify(allAttendanceStudents));
+      const cacheKey = isMain ? ('smart_school_daily_att_' + date) : ('smart_school_daily_att_' + encodeURIComponent(activeCampus) + '_' + date);
+      localStorage.setItem(cacheKey, JSON.stringify(allAttendanceStudents));
     } catch {}
 
     // 2. Broadcast multi-window & cross-tab sync
@@ -247,6 +260,7 @@ function bindAttendanceMarkEvents() {
 
     const st = allAttendanceStudents.find(s => s.id === studentId);
     api.post('/attendance/bulk', {
+      campus: activeCampus,
       date,
       class_id: st?.class_id || null,
       section: st?.section || null,

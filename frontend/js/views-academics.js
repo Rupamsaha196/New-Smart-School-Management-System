@@ -9,18 +9,19 @@
 let classList = [];
 
 async function renderClasses() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   try {
-    const res = await api.get('/academics/classes');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    const res = await api.get('/academics/classes', { campus: activeCampus });
+    if (Array.isArray(res.data)) {
       classList = res.data;
-    } else if (Array.isArray(res) && res.length > 0) {
+    } else if (Array.isArray(res)) {
       classList = res;
     } else if (window.SS_STORE) {
-      classList = window.SS_STORE.get('classes');
+      classList = window.SS_STORE.get('classes', activeCampus);
     }
   } catch (err) {
     console.warn('Classes central DB sync fallback:', err);
-    if (window.SS_STORE) classList = window.SS_STORE.get('classes');
+    if (window.SS_STORE) classList = window.SS_STORE.get('classes', activeCampus);
   }
 
   return `
@@ -65,8 +66,15 @@ async function renderClasses() {
 }
 
 function renderClassRows(items) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   if (!items || items.length === 0) {
-    return `<tr><td colspan="7" class="text-center p-8 text-secondary">No classes configured. Click "Add New Class" to get started.</td></tr>`;
+    return `<tr><td colspan="7" class="text-center p-8 text-secondary">
+      <div style="padding: 24px 12px;">
+        <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">🏛️</span>
+        <strong style="color: var(--text-primary); font-size: 1.05rem;">No classes configured for ${activeCampus} (0 data)</strong>
+        <p class="text-xs text-secondary mt-1">Click <strong>"Add New Class"</strong> above to configure classes and sections for this school.</p>
+      </div>
+    </td></tr>`;
   }
   return items.map(c => `
     <tr>
@@ -283,7 +291,9 @@ function bindClassesEvents() {
           const fee = parseFloat(document.getElementById('modal-class-fee').value) || 12000;
           const strength = parseInt(document.getElementById('modal-class-strength').value) || 0;
 
+          const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
           const newClass = {
+            campus: activeCampus,
             name,
             numeric,
             section,
@@ -293,9 +303,9 @@ function bindClassesEvents() {
           };
 
           try {
-            await api.post('/academics/classes', { name, class_teacher: teacher, sections: section, numeric });
-            const clRes = await api.get('/academics/classes');
-            if (Array.isArray(clRes.data) && clRes.data.length > 0) {
+            await api.post('/academics/classes', { name, class_teacher: teacher, sections: section, numeric, campus: activeCampus });
+            const clRes = await api.get('/academics/classes', { campus: activeCampus });
+            if (Array.isArray(clRes.data)) {
               classList = clRes.data;
             }
           } catch (e) {
@@ -327,18 +337,19 @@ function bindClassesEvents() {
 let subjectList = [];
 
 async function renderSubjects() {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   try {
-    const res = await api.get('/academics/subjects');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    const res = await api.get('/academics/subjects', { campus: activeCampus });
+    if (Array.isArray(res.data)) {
       subjectList = res.data;
-    } else if (Array.isArray(res) && res.length > 0) {
+    } else if (Array.isArray(res)) {
       subjectList = res;
     } else if (window.SS_STORE) {
-      subjectList = window.SS_STORE.get('subjects');
+      subjectList = window.SS_STORE.get('subjects', activeCampus);
     }
   } catch (err) {
     console.warn('Subjects central DB sync fallback:', err);
-    if (window.SS_STORE) subjectList = window.SS_STORE.get('subjects');
+    if (window.SS_STORE) subjectList = window.SS_STORE.get('subjects', activeCampus);
   }
 
   return `
@@ -377,8 +388,15 @@ async function renderSubjects() {
 }
 
 function renderSubjectRows(items) {
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   if (!items || items.length === 0) {
-    return `<tr><td colspan="6" class="text-center p-8 text-secondary">No subjects found in curriculum.</td></tr>`;
+    return `<tr><td colspan="6" class="text-center p-8 text-secondary">
+      <div style="padding: 24px 12px;">
+        <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">🏛️</span>
+        <strong style="color: var(--text-primary); font-size: 1.05rem;">No subjects configured for ${activeCampus} (0 data)</strong>
+        <p class="text-xs text-secondary mt-1">Click <strong>"Add Subject"</strong> above to configure subjects for this school.</p>
+      </div>
+    </td></tr>`;
   }
   return items.map(s => `
     <tr>

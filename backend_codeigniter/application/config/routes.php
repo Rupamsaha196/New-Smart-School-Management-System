@@ -86,6 +86,7 @@ $route['api/exams/(:num)/admit-card']       = 'exams/admit_card/$1';
 $route['api/academics/classes']             = 'academics/classes';
 $route['api/academics/classes/(:num)']      = 'academics/destroy_class/$1';
 $route['api/classes']                       = 'academics/classes';
+$route['api/school-classes']                = 'academics/classes';
 $route['api/classes/(:num)']                = 'academics/destroy_class/$1';
 $route['api/academics/subjects']            = 'academics/subjects';
 $route['api/academics/subjects/(:num)']     = 'academics/destroy_subject/$1';
