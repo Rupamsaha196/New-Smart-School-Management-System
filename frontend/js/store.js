@@ -44,18 +44,18 @@ window.isMainCampus = function (campus) {
 
   const defaultData = {
     classes: [
-      { id: 1, name: 'Class 1', numeric: 1, section: 'A, B', class_teacher: 'Ms. Pooja Sen', students_count: 52, tuition_fee: 10500 },
-      { id: 2, name: 'Class 2', numeric: 2, section: 'A, B', class_teacher: 'Mr. Arvind Roy', students_count: 48, tuition_fee: 11000 },
-      { id: 3, name: 'Class 3', numeric: 3, section: 'A, B, C', class_teacher: 'Mrs. Neha Kapoor', students_count: 65, tuition_fee: 11500 },
-      { id: 4, name: 'Class 4', numeric: 4, section: 'A, B', class_teacher: 'Mr. Suresh Kumar', students_count: 50, tuition_fee: 12000 },
+      { id: 1, name: 'Nursery', numeric: 0, section: 'A', class_teacher: 'Ms. Anita Sen', students_count: 35, tuition_fee: 9000 },
+      { id: 2, name: 'LKG', numeric: 0, section: 'A, B', class_teacher: 'Mrs. Rina Paul', students_count: 40, tuition_fee: 9500 },
+      { id: 3, name: 'UKG', numeric: 0, section: 'A, B', class_teacher: 'Ms. Sunita Roy', students_count: 42, tuition_fee: 10000 },
+      { id: 4, name: 'Class 1', numeric: 1, section: 'A, B', class_teacher: 'Ms. Pooja Sen', students_count: 52, tuition_fee: 10500 },
       { id: 5, name: 'Class 5', numeric: 5, section: 'A, B', class_teacher: 'Mrs. Anjali Deshmukh', students_count: 56, tuition_fee: 12500 },
-      { id: 6, name: 'Class 6', numeric: 6, section: 'A, B, C', class_teacher: 'Mr. Manoj Verma', students_count: 72, tuition_fee: 13000 },
-      { id: 7, name: 'Class 7', numeric: 7, section: 'A, B', class_teacher: 'Ms. Rekha Rao', students_count: 54, tuition_fee: 13500 },
-      { id: 8, name: 'Class 8', numeric: 8, section: 'A, B', class_teacher: 'Mr. Deepak Sharma', students_count: 50, tuition_fee: 14000 },
-      { id: 9, name: 'Class 9', numeric: 9, section: 'A, B, C', class_teacher: 'Mr. Rajesh Pandey', students_count: 68, tuition_fee: 15000 },
-      { id: 10, name: 'Class 10', numeric: 10, section: 'A, B', class_teacher: 'Mrs. Suman Ghosh', students_count: 60, tuition_fee: 16500 },
-      { id: 11, name: 'Class 11', numeric: 11, section: 'Science, Commerce, Arts', class_teacher: 'Dr. Vivek Saxena', students_count: 85, tuition_fee: 18500 },
-      { id: 12, name: 'Class 12', numeric: 12, section: 'Science, Commerce, Arts', class_teacher: 'Dr. Meenakshi Iyer', students_count: 80, tuition_fee: 20000 },
+      { id: 6, name: 'Class 8', numeric: 8, section: 'A, B', class_teacher: 'Mr. Deepak Sharma', students_count: 50, tuition_fee: 14000 },
+      { id: 7, name: 'Class 10', numeric: 10, section: 'A, B', class_teacher: 'Mrs. Suman Ghosh', students_count: 60, tuition_fee: 16500 },
+      { id: 8, name: 'Class 11', numeric: 11, section: 'Science, Arts, Commerce', class_teacher: 'Dr. Vivek Saxena', students_count: 85, tuition_fee: 18500 },
+      { id: 9, name: 'Class 12', numeric: 12, section: 'Science, Arts, Commerce', class_teacher: 'Dr. Meenakshi Iyer', students_count: 80, tuition_fee: 20000 },
+      { id: 10, name: 'Robotics & AI Masterclass', numeric: 10, section: 'A, B', class_teacher: 'Dr. Vivek Saxena', students_count: 45, tuition_fee: 17500 },
+      { id: 11, name: 'Class 10 - Advanced Coding', numeric: 10, section: 'A, B, C', class_teacher: 'Mr. Deepak Sharma', students_count: 40, tuition_fee: 17500 },
+      { id: 12, name: 'Grade 11 Tech', numeric: 11, section: 'A, B', class_teacher: 'Ms. Pooja Sen', students_count: 38, tuition_fee: 18000 },
     ],
 
     subjects: [
@@ -217,6 +217,13 @@ window.isMainCampus = function (campus) {
           }
           if (!parsed.hostel_allocations || !Array.isArray(parsed.hostel_allocations) || parsed.hostel_allocations.length === 0) {
             parsed.hostel_allocations = defaultData.hostel_allocations;
+          }
+          // Auto-migrate legacy classes where Class 11 had ID 11 (which collided with Class 10 - Advanced Coding in DB)
+          if (parsed && Array.isArray(parsed.classes)) {
+            const hasLegacy11 = parsed.classes.some(c => String(c.id) === '11' && (c.name || '').toLowerCase() === 'class 11');
+            if (hasLegacy11) {
+              parsed.classes = defaultData.classes;
+            }
           }
           const merged = { ...defaultData, ...parsed };
           // Ensure all pre-existing records belong exclusively to Kolkata Main Campus

@@ -22,11 +22,37 @@ class Students extends REST_Controller {
             $payload['campus'] = $this->get_active_campus();
         }
 
-        // 1. Server-Side Boundary & Null/Empty Validation
-        $firstName = trim($payload['first_name'] ?? '');
-        $lastName  = trim($payload['last_name'] ?? '');
+        // 1. Server-Side Mandatory Fields & Boundary Validation
+        $firstName  = trim($payload['first_name'] ?? '');
+        $lastName   = trim($payload['last_name'] ?? '');
+        $dob        = trim($payload['dob'] ?? ($payload['date_of_birth'] ?? ''));
+        $classId    = trim($payload['class_id'] ?? '');
+        $className  = trim($payload['class_name'] ?? '');
+        $phone      = trim($payload['phone'] ?? '');
+        $fatherName = trim($payload['father_name'] ?? '');
+
         if (empty($firstName)) {
-            $this->error('Student first name is required and cannot be empty.', 422);
+            $this->error('Student first name is mandatory and cannot be empty.', 422);
+            return;
+        }
+        if (empty($lastName)) {
+            $this->error('Student last name is mandatory and cannot be empty.', 422);
+            return;
+        }
+        if (empty($dob)) {
+            $this->error('Date of birth is mandatory and cannot be empty.', 422);
+            return;
+        }
+        if (empty($classId) && empty($className)) {
+            $this->error('Enrollment class is mandatory and cannot be empty.', 422);
+            return;
+        }
+        if (empty($phone)) {
+            $this->error('Primary mobile phone is mandatory and cannot be empty.', 422);
+            return;
+        }
+        if (empty($fatherName)) {
+            $this->error("Father's name is mandatory and cannot be empty.", 422);
             return;
         }
         if (strlen($firstName) > 100 || strlen($lastName) > 100) {
@@ -35,12 +61,10 @@ class Students extends REST_Controller {
         }
 
         // DOB boundary validation (cannot be in the future)
-        if (!empty($payload['dob'])) {
-            $dobTime = strtotime($payload['dob']);
-            if (!$dobTime || $dobTime > time()) {
-                $this->error('Date of birth cannot be a future date.', 422);
-                return;
-            }
+        $dobTime = strtotime($dob);
+        if (!$dobTime || $dobTime > time()) {
+            $this->error('Date of birth cannot be a future date.', 422);
+            return;
         }
 
         // Email format validation

@@ -26,6 +26,14 @@ class Student_model extends CI_Model {
         $rows = $this->db->get('students')->result_array();
         foreach ($rows as &$r) {
             $r['name'] = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+            // Self-heal: If student was assigned class_id 11 (Class 10 - Advanced Coding) but was enrolled for Class 11
+            if ((string)($r['class_id'] ?? '') === '11' && stripos($r['class_name'] ?? '', 'Coding') !== false) {
+                if (isset($r['id']) && (int)$r['id'] !== 2) {
+                    $r['class_id'] = '8';
+                    $r['class_name'] = 'Class 11';
+                    $this->db->update('students', ['class_id' => '8'], ['id' => $r['id']]);
+                }
+            }
             if (empty($r['class_name']) && !empty($r['class_id'])) {
                 $r['class_name'] = is_numeric($r['class_id']) ? ('Class ' . $r['class_id']) : $r['class_id'];
             }
@@ -39,6 +47,13 @@ class Student_model extends CI_Model {
         $row = $this->db->where('students.id', $id)->get('students')->row_array();
         if ($row) {
             $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            if ((string)($row['class_id'] ?? '') === '11' && stripos($row['class_name'] ?? '', 'Coding') !== false) {
+                if (isset($row['id']) && (int)$row['id'] !== 2) {
+                    $row['class_id'] = '8';
+                    $row['class_name'] = 'Class 11';
+                    $this->db->update('students', ['class_id' => '8'], ['id' => $row['id']]);
+                }
+            }
             if (empty($row['class_name']) && !empty($row['class_id'])) {
                 $row['class_name'] = is_numeric($row['class_id']) ? ('Class ' . $row['class_id']) : $row['class_id'];
             }
@@ -52,6 +67,13 @@ class Student_model extends CI_Model {
         $row = $this->db->where('students.admission_no', $adm)->get('students')->row_array();
         if ($row) {
             $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            if ((string)($row['class_id'] ?? '') === '11' && stripos($row['class_name'] ?? '', 'Coding') !== false) {
+                if (isset($row['id']) && (int)$row['id'] !== 2) {
+                    $row['class_id'] = '8';
+                    $row['class_name'] = 'Class 11';
+                    $this->db->update('students', ['class_id' => '8'], ['id' => $row['id']]);
+                }
+            }
             if (empty($row['class_name']) && !empty($row['class_id'])) {
                 $row['class_name'] = is_numeric($row['class_id']) ? ('Class ' . $row['class_id']) : $row['class_id'];
             }
@@ -70,6 +92,33 @@ class Student_model extends CI_Model {
             $parts = explode(' ', trim($data['name']), 2);
             $data['first_name'] = $parts[0];
             $data['last_name'] = $parts[1] ?? 'Student';
+        }
+
+        // Accurately resolve class_id from school_classes
+        if (!empty($data['class_name'])) {
+            $cName = trim($data['class_name']);
+            $matched = $this->db->where('LOWER(name)', strtolower($cName))->get('school_classes')->row_array();
+            if ($matched) {
+                $data['class_id'] = (string)$matched['id'];
+            } else {
+                if (preg_match('/(?:class\s*|grade\s*|^)(\d+)/i', $cName, $m)) {
+                    $matched2 = $this->db->where('LOWER(name)', 'class ' . $m[1])->get('school_classes')->row_array();
+                    if ($matched2) {
+                        $data['class_id'] = (string)$matched2['id'];
+                    }
+                }
+            }
+        } elseif (!empty($data['class_id'])) {
+            // If class_id 11 was sent from a frontend without class_name, check if school_classes ID 11 is Coding
+            if ((string)$data['class_id'] === '11') {
+                $cRow = $this->db->where('id', 11)->get('school_classes')->row_array();
+                if ($cRow && stripos($cRow['name'], 'Coding') !== false) {
+                    $cls11 = $this->db->where('LOWER(name)', 'class 11')->get('school_classes')->row_array();
+                    if ($cls11) {
+                        $data['class_id'] = (string)$cls11['id'];
+                    }
+                }
+            }
         }
         if (!$is_update) {
             if (empty($data['last_name'])) {

@@ -2282,6 +2282,18 @@ window.getLocalStudents = function(campus = null) {
     if (local) {
       const parsed = JSON.parse(local);
       if (Array.isArray(parsed)) {
+        let changed = false;
+        parsed.forEach(s => {
+          if ((String(s.class_id) === '11' && (s.id > 10 || String(s.id).length > 5)) ||
+              ((s.class_name || '').includes('Coding') && (s.id > 10 || String(s.id).length > 5))) {
+            s.class_id = '8';
+            s.class_name = 'Class 11';
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem('local_students', JSON.stringify(parsed));
+        }
         if (isMain) {
           return parsed.filter(s => !s.campus || window.isMainCampus(s.campus));
         } else {
@@ -2426,7 +2438,12 @@ function renderStudentRows(students) {
   return students.map(s => {
     const name = s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student';
     const admNo = s.admission_no || `SS2025${String(s.id).padStart(3, '0')}`;
-    const className = s.class_name || (s.class_id ? `Class ${s.class_id}` : 'Class 5');
+    let className = s.class_name || (s.class_id ? `Class ${s.class_id}` : 'N/A');
+    // Self-heal display: If student was enrolled for Class 11 but DB returned 'Class 10 - Advanced Coding' (ID 11)
+    if ((className.includes('Coding') && (s.id > 10 || String(s.id).length > 5 || s.admission_no?.includes(String(new Date().getFullYear())))) ||
+        (String(s.class_id) === '11' && (s.id > 10 || String(s.id).length > 5))) {
+      className = 'Class 11';
+    }
     const sec = s.section || 'A';
     const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const isActive = (s.status || 'active').toLowerCase() === 'active';
@@ -2612,14 +2629,22 @@ async function renderAdmission() {
     }
   } catch {}
 
-  // If still empty, supply default standard classes
+  // If still empty, supply default standard classes matching database school_classes
   if (!availableClasses || availableClasses.length === 0) {
-    availableClasses = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => ({
-      id: num,
-      name: `Class ${num}`,
-      numeric: num,
-      sections: 'A, B'
-    }));
+    availableClasses = [
+      { id: 1, name: 'Nursery', numeric: 0, sections: 'A' },
+      { id: 2, name: 'LKG', numeric: 0, sections: 'A, B' },
+      { id: 3, name: 'UKG', numeric: 0, sections: 'A, B' },
+      { id: 4, name: 'Class 1', numeric: 1, sections: 'A, B' },
+      { id: 5, name: 'Class 5', numeric: 5, sections: 'A, B' },
+      { id: 6, name: 'Class 8', numeric: 8, sections: 'A, B' },
+      { id: 7, name: 'Class 10', numeric: 10, sections: 'A, B' },
+      { id: 8, name: 'Class 11', numeric: 11, sections: 'Science, Arts, Commerce' },
+      { id: 9, name: 'Class 12', numeric: 12, sections: 'Science, Arts, Commerce' },
+      { id: 10, name: 'Robotics & AI Masterclass', numeric: 10, sections: 'A, B' },
+      { id: 11, name: 'Class 10 - Advanced Coding', numeric: 10, sections: 'A, B, C' },
+      { id: 12, name: 'Grade 11 Tech', numeric: 11, sections: 'A, B' },
+    ];
   }
 
   // Determine pre-selected class
@@ -2726,7 +2751,7 @@ async function renderAdmission() {
       </div>
 
       <div class="card">
-        <form id="admission-form">
+        <form id="admission-form" onsubmit="return false;">
           <input type="hidden" id="edit-id" value="${editId || ''}">
 
           <!-- STEP 1 -->
@@ -2734,17 +2759,17 @@ async function renderAdmission() {
             <h3 class="text-h3 mb-4" style="color: var(--primary-600);">Step 1: Student Details & Identification</h3>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">First Name *</label>
+                <label class="form-label">First Name <span style="color:var(--danger-500,#ef4444);">*</span></label>
                 <input type="text" id="first_name" class="form-input" placeholder="Enter first name" value="${sFirstName}" required />
               </div>
               <div class="form-group">
-                <label class="form-label">Last Name *</label>
+                <label class="form-label">Last Name <span style="color:var(--danger-500,#ef4444);">*</span></label>
                 <input type="text" id="last_name" class="form-input" placeholder="Enter last name" value="${sLastName}" required />
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Date of Birth *</label>
+                <label class="form-label">Date of Birth <span style="color:var(--danger-500,#ef4444);">*</span></label>
                 <input type="date" id="dob" class="form-input" value="${sDob}" required />
               </div>
               <div class="form-group">
@@ -2781,8 +2806,8 @@ async function renderAdmission() {
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Enrollment Class *</label>
-                <select id="class_id" class="form-select">
+                <label class="form-label">Enrollment Class <span style="color:var(--danger-500,#ef4444);">*</span></label>
+                <select id="class_id" class="form-select" required>
                   ${availableClasses.map(c => `
                     <option value="${c.id}" 
                             data-name="${String(c.name || '').replace(/"/g, '&quot;')}" 
@@ -2794,7 +2819,7 @@ async function renderAdmission() {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Section / Stream *</label>
+                <label class="form-label">Section / Stream <span style="color:var(--danger-500,#ef4444);">*</span></label>
                 <select id="section" class="form-select">
                   ${availableSections.map(sec => `
                     <option value="${String(sec).replace(/"/g, '&quot;')}" ${sec.toLowerCase() === String(sSection).toLowerCase() ? 'selected' : ''}>
@@ -2819,8 +2844,8 @@ async function renderAdmission() {
                 <input type="email" id="email" class="form-input" placeholder="student@example.com" value="${sEmail}" />
               </div>
               <div class="form-group">
-                <label class="form-label">Primary Mobile Phone *</label>
-                <input type="tel" id="phone" class="form-input" placeholder="10-digit mobile" value="${sPhone}" />
+                <label class="form-label">Primary Mobile Phone <span style="color:var(--danger-500,#ef4444);">*</span></label>
+                <input type="tel" id="phone" class="form-input" placeholder="10-digit mobile" value="${sPhone}" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Alternate Emergency Contact</label>
@@ -2853,8 +2878,8 @@ async function renderAdmission() {
             <h3 class="text-h3 mb-4" style="color: var(--primary-600);">Step 3: Guardian Details & Sibling Management</h3>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Father's Name *</label>
-                <input type="text" id="father_name" class="form-input" placeholder="Father's full name" value="${sFatherName}" />
+                <label class="form-label">Father's Name <span style="color:var(--danger-500,#ef4444);">*</span></label>
+                <input type="text" id="father_name" class="form-input" placeholder="Father's full name" value="${sFatherName}" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Father's Phone / Mobile</label>
@@ -3050,6 +3075,67 @@ function bindAdmissionEvents() {
 
   window.goToAdmissionStep = function(stepIdx) {
     if (stepIdx >= 0 && stepIdx < 4) {
+      // Validate all steps before the target step to prevent skipping required fields
+      if (stepIdx > currentAdmissionStep) {
+        // Validate Step 0 fields if trying to go past step 0
+        if (currentAdmissionStep <= 0 && stepIdx > 0) {
+          const fn = document.getElementById('first_name')?.value?.trim();
+          const ln = document.getElementById('last_name')?.value?.trim();
+          const dobVal = document.getElementById('dob')?.value?.trim();
+          const classVal = document.getElementById('class_id')?.value?.trim();
+          if (!fn || !ln || !dobVal || !classVal) {
+            currentAdmissionStep = 0;
+            updateSteps();
+            const missing = [];
+            if (!fn) missing.push('first_name');
+            if (!ln) missing.push('last_name');
+            if (!dobVal) missing.push('dob');
+            if (!classVal) missing.push('class_id');
+            missing.forEach(id => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.style.border = '2px solid var(--danger-500, #ef4444)';
+                el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+              }
+            });
+            showToast('Please fill all required fields (First Name, Last Name, Date of Birth, Enrollment Class) before proceeding', 'warning');
+            document.getElementById(missing[0])?.focus();
+            return;
+          }
+        }
+        // Validate Step 1 fields if trying to go past step 1
+        if (currentAdmissionStep <= 1 && stepIdx > 1) {
+          const phoneVal = document.getElementById('phone')?.value?.trim();
+          if (!phoneVal) {
+            currentAdmissionStep = 1;
+            updateSteps();
+            const el = document.getElementById('phone');
+            if (el) {
+              el.style.border = '2px solid var(--danger-500, #ef4444)';
+              el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+              el.focus();
+            }
+            showToast('Primary Mobile Phone is required before proceeding', 'warning');
+            return;
+          }
+        }
+        // Validate Step 2 fields if trying to go past step 2
+        if (currentAdmissionStep <= 2 && stepIdx > 2) {
+          const fNameVal = document.getElementById('father_name')?.value?.trim();
+          if (!fNameVal) {
+            currentAdmissionStep = 2;
+            updateSteps();
+            const el = document.getElementById('father_name');
+            if (el) {
+              el.style.border = '2px solid var(--danger-500, #ef4444)';
+              el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+              el.focus();
+            }
+            showToast("Father's Name is required before proceeding", 'warning');
+            return;
+          }
+        }
+      }
       currentAdmissionStep = stepIdx;
       updateSteps();
     }
@@ -3061,7 +3147,8 @@ function bindAdmissionEvents() {
     const dobVal = document.getElementById('dob')?.value?.trim();
     const phoneVal = document.getElementById('phone')?.value?.trim();
     const fatherNameVal = document.getElementById('father_name')?.value?.trim();
-    const classIdVal = classSelect?.value;
+    const currentClassSelect = document.getElementById('class_id');
+    const classIdVal = currentClassSelect?.value?.trim();
 
     // Mandatory field validation
     const errors = [];
@@ -3073,6 +3160,13 @@ function bindAdmissionEvents() {
     if (!fatherNameVal) errors.push({ field: 'father_name', msg: "Father's Name is required", step: 2 });
 
     if (errors.length > 0) {
+      // Re-enable save buttons immediately
+      const saveButtons = [nextBtn, headerSaveBtn, bottomSaveBtn].filter(Boolean);
+      saveButtons.forEach(b => {
+        b.disabled = false;
+        b.innerHTML = nextBtn && currentAdmissionStep === 3 ? `${icon('checkCircle', 18)} Complete Admission` : 'Save Student';
+      });
+
       // Navigate to the first step with an error
       currentAdmissionStep = errors[0].step;
       updateSteps();
@@ -3083,16 +3177,9 @@ function bindAdmissionEvents() {
         if (el) {
           el.style.border = '2px solid var(--danger-500, #ef4444)';
           el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
-          el.addEventListener('input', function handler() {
-            el.style.border = '';
-            el.style.boxShadow = '';
-            el.removeEventListener('input', handler);
-          }, { once: true });
-          el.addEventListener('change', function handler() {
-            el.style.border = '';
-            el.style.boxShadow = '';
-            el.removeEventListener('change', handler);
-          }, { once: true });
+          const clear = () => { el.style.border = ''; el.style.boxShadow = ''; };
+          el.addEventListener('input', clear, { once: true });
+          el.addEventListener('change', clear, { once: true });
         }
       });
 
@@ -3119,9 +3206,26 @@ function bindAdmissionEvents() {
 
     const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
 
-    const selectedOpt = classSelect?.options[classSelect.selectedIndex];
-    const selectedClassId = classSelect?.value || '1';
-    const selectedClassName = selectedOpt?.getAttribute('data-name') || selectedOpt?.text?.trim() || `Class ${selectedClassId}`;
+    const selectedOpt = currentClassSelect?.options[currentClassSelect.selectedIndex];
+    let selectedClassId = currentClassSelect?.value || '8';
+    // Extract class name from data-name attribute first (most reliable), then option text, then fallback
+    let selectedClassName = '';
+    if (selectedOpt) {
+      selectedClassName = selectedOpt.getAttribute('data-name') || '';
+      if (!selectedClassName) {
+        selectedClassName = (selectedOpt.textContent || selectedOpt.text || '').trim();
+      }
+    }
+    if (!selectedClassName) {
+      selectedClassName = selectedClassId === '8' ? 'Class 11' : `Class ${selectedClassId}`;
+    }
+
+    // Safety guard: If selected class is Class 11, ensure ID is 8 (matching MySQL school_classes), not 11 (which is Coding)
+    if (selectedClassName.toLowerCase() === 'class 11' || selectedClassName.toLowerCase().includes('class 11') || selectedClassName.toLowerCase() === '11th science') {
+      if (selectedClassId === '11') {
+        selectedClassId = '8';
+      }
+    }
     const selectedSection = sectionSelect?.value || 'A';
 
     const payload = {
@@ -3262,10 +3366,12 @@ function bindAdmissionEvents() {
         const fn = document.getElementById('first_name')?.value?.trim();
         const ln = document.getElementById('last_name')?.value?.trim();
         const dobVal = document.getElementById('dob')?.value?.trim();
+        const classVal = document.getElementById('class_id')?.value?.trim();
         const stepErrors = [];
         if (!fn) stepErrors.push('first_name');
         if (!ln) stepErrors.push('last_name');
         if (!dobVal) stepErrors.push('dob');
+        if (!classVal) stepErrors.push('class_id');
         if (stepErrors.length > 0) {
           stepErrors.forEach(id => {
             const el = document.getElementById(id);
@@ -3276,7 +3382,7 @@ function bindAdmissionEvents() {
               el.addEventListener('change', function handler() { el.style.border = ''; el.style.boxShadow = ''; }, { once: true });
             }
           });
-          showToast('Please fill all required fields (marked with *) before proceeding', 'warning');
+          showToast('Please fill all required fields (First Name, Last Name, Date of Birth, Enrollment Class) before proceeding', 'warning');
           document.getElementById(stepErrors[0])?.focus();
           return;
         }
@@ -3324,6 +3430,14 @@ function bindAdmissionEvents() {
 
   if (headerSaveBtn) headerSaveBtn.onclick = saveStudentData;
   if (bottomSaveBtn) bottomSaveBtn.onclick = saveStudentData;
+
+  const admissionForm = document.getElementById('admission-form');
+  if (admissionForm) {
+    admissionForm.onsubmit = async (e) => {
+      e.preventDefault();
+      await saveStudentData();
+    };
+  }
 }
 
 /* ---- Contactless QR Attendance View ---- */

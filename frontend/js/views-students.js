@@ -55,8 +55,11 @@ async function renderStudentProfile(params) {
   }
 
   const name = student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Student';
-  const admNo = student.admission_no || `SS2025${String(student.id).padStart(3, '0')}`;
-  const className = student.class_name || (student.class_id ? `Class ${student.class_id}` : 'Class 5');
+  let className = student.class_name || (student.class_id ? `Class ${student.class_id}` : 'Class 5');
+  if ((String(student.class_id) === '11' && (className.includes('Coding')) && (student.id > 10 || String(student.id).length > 5)) ||
+      (className.includes('Coding') && (student.id > 10 || String(student.id).length > 5))) {
+    className = 'Class 11';
+  }
   const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
   const feeSummary = student.fee_summary || student.profile_360?.fee_summary || {
