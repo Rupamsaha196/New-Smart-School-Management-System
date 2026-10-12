@@ -99,7 +99,8 @@ class Operations_model extends CI_Model {
     }
 
     public function create_book(array $data): int {
-        $clean = [
+        $fields = $this->db->list_fields('library_books');
+        $raw = [
             'title'         => $data['title'] ?? 'Untitled Book',
             'author'        => $data['author'] ?? 'Unknown Author',
             'isbn'          => $data['isbn'] ?? null,
@@ -107,9 +108,14 @@ class Operations_model extends CI_Model {
             'qty'           => (int)($data['qty'] ?? 1),
             'available_qty' => (int)($data['available_qty'] ?? ($data['qty'] ?? 1)),
             'rack_no'       => $data['rack'] ?? ($data['rack_no'] ?? 'Rack A-01'),
+            'campus'        => !empty($data['campus']) ? $data['campus'] : 'Kolkata Main Campus (Salt Lake Sector V)',
             'created_at'    => date('Y-m-d H:i:s'),
             'updated_at'    => date('Y-m-d H:i:s'),
         ];
+        $clean = [];
+        foreach ($raw as $k => $v) {
+            if (in_array($k, $fields)) $clean[$k] = $v;
+        }
         $this->db->insert('library_books', $clean);
         return $this->db->insert_id();
     }
@@ -207,30 +213,51 @@ class Operations_model extends CI_Model {
     }
 
     public function create_hostel(array $data): int {
-        $clean = [
+        $fields = $this->db->list_fields('hostels');
+        $raw = [
             'name'       => $data['name'] ?? ($data['hostel_name'] ?? 'New Hostel Block'),
             'type'       => $data['type'] ?? 'Boys',
             'address'    => $data['address'] ?? 'School Campus',
             'intake'     => (int)($data['capacity'] ?? ($data['intake'] ?? 50)),
+            'campus'     => !empty($data['campus']) ? $data['campus'] : 'Kolkata Main Campus (Salt Lake Sector V)',
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s'),
         ];
+        $clean = [];
+        foreach ($raw as $k => $v) {
+            if (in_array($k, $fields)) $clean[$k] = $v;
+        }
         $this->db->insert('hostels', $clean);
         return $this->db->insert_id();
     }
 
     // ── Hostel Allocations ─────────────────────
     public function allocate_student(array $data): int {
+        $student_id = (int)($data['student_id'] ?? 0);
+        $hostel_id  = (int)($data['hostel_id'] ?? 0);
+
+        // Foreign key integrity check
+        $st = $this->db->where('id', $student_id)->get('students')->row_array();
+        if (!$st) {
+            log_message('error', "Cannot allocate student {$student_id}: student does not exist in MySQL");
+            return 0;
+        }
+        $hostel = $this->db->where('id', $hostel_id)->get('hostels')->row_array();
+        if (!$hostel) {
+            log_message('error', "Cannot allocate hostel {$hostel_id}: hostel block does not exist in MySQL");
+            return 0;
+        }
+
         $room_id = !empty($data['room_id']) ? (int)$data['room_id'] : null;
         if (!$room_id && !empty($data['room_no'])) {
-            $existing = $this->db->where('hostel_id', (int)$data['hostel_id'])
+            $existing = $this->db->where('hostel_id', $hostel_id)
                                  ->where('room_no', $data['room_no'])
                                  ->get('hostel_rooms')->row_array();
             if ($existing) {
                 $room_id = (int)$existing['id'];
             } else {
                 $this->db->insert('hostel_rooms', [
-                    'hostel_id'  => (int)$data['hostel_id'],
+                    'hostel_id'  => $hostel_id,
                     'room_no'    => $data['room_no'],
                     'type'       => $data['room_type'] ?? 'Standard',
                     'capacity'   => (int)($data['capacity'] ?? 2),
@@ -244,8 +271,8 @@ class Operations_model extends CI_Model {
 
         $join_date = !empty($data['join_date']) ? date('Y-m-d', strtotime($data['join_date'])) : date('Y-m-d');
         $clean = [
-            'student_id' => (int)$data['student_id'],
-            'hostel_id'  => (int)$data['hostel_id'],
+            'student_id' => $student_id,
+            'hostel_id'  => $hostel_id,
             'room_id'    => $room_id,
             'join_date'  => $join_date,
             'leave_date' => !empty($data['leave_date']) ? date('Y-m-d', strtotime($data['leave_date'])) : null,

@@ -61,7 +61,7 @@ async function renderAttendanceMark() {
         return {
           id: s.id,
           admission_no: s.admission_no || `SS2025${String(idx + 1).padStart(3, '0')}`,
-          name: ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || `Student ${idx + 1}`,
+          name: ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || s.name || `Student ${idx + 1}`,
           roll_no: s.roll_no || (idx + 1),
           class_id: s.class_id,
           class_name: s.class || s.class_name || 'Class 10',
@@ -69,27 +69,41 @@ async function renderAttendanceMark() {
           status: initialStatus,
         };
       });
+    } else if (window.SS_STORE && (window.SS_STORE.get('students', activeCampus) || []).length > 0) {
+      const storeStudents = window.SS_STORE.get('students', activeCampus);
+      allAttendanceStudents = storeStudents.map((s, idx) => ({
+        id: s.id,
+        admission_no: s.admission_no || `SS2025${String(idx + 1).padStart(3, '0')}`,
+        name: ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || s.name || `Student ${idx + 1}`,
+        roll_no: s.roll_no || (idx + 1),
+        class_id: s.class_id,
+        class_name: s.class || s.class_name || 'Class 10',
+        section: s.section || 'A',
+        status: 'Present',
+      }));
     } else {
-      allAttendanceStudents = isMain ? [
-        { id: 1, admission_no: 'SS2025001', name: 'Aarav Sharma', roll_no: 1, class_id: 10, class_name: 'Class 10', section: 'A', status: 'Present' },
-        { id: 2, admission_no: 'SS2025002', name: 'Priya Singh', roll_no: 2, class_id: 10, class_name: 'Class 10', section: 'A', status: 'Present' },
-        { id: 3, admission_no: 'SS2025003', name: 'Rohan Patel', roll_no: 3, class_id: 10, class_name: 'Class 10', section: 'A', status: 'Present' },
-        { id: 4, admission_no: 'SS2025004', name: 'Ananya Gupta', roll_no: 4, class_id: 9, class_name: 'Class 9', section: 'B', status: 'Absent' },
-        { id: 5, admission_no: 'SS2025005', name: 'Vikram Reddy', roll_no: 5, class_id: 9, class_name: 'Class 9', section: 'B', status: 'Late' },
-        { id: 6, admission_no: 'SS2025006', name: 'Meera Nair', roll_no: 6, class_id: 8, class_name: 'Class 8', section: 'A', status: 'Present' },
-        { id: 7, admission_no: 'SS2025007', name: 'Arjun Das', roll_no: 7, class_id: 7, class_name: 'Class 7', section: 'A', status: 'Present' },
-        { id: 8, admission_no: 'SS2025008', name: 'Sanya Chopra', roll_no: 8, class_id: 6, class_name: 'Class 6', section: 'A', status: 'Present' },
-      ] : [];
+      allAttendanceStudents = [];
+    }
 
-      allAttendanceStudents.forEach(st => {
-        const fromDb = existingAtt.find(r => String(r.student_id) === String(st.id));
-        if (fromDb && fromDb.status) {
-          st.status = fromDb.status;
-        } else {
-          const fromLoc = localCache.find(r => String(r.id || r.student_id) === String(st.id));
-          if (fromLoc && fromLoc.status) st.status = fromLoc.status;
+    // Auto-sync any unsynced local cache to MySQL DB
+    if (localCache.length > 0 && allAttendanceStudents.length > 0) {
+      const unsynced = [];
+      for (const lc of localCache) {
+        const sid = lc.id || lc.student_id;
+        if (sid && allAttendanceStudents.some(s => String(s.id) === String(sid))) {
+          const fromDb = existingAtt.find(r => String(r.student_id) === String(sid));
+          if (!fromDb || fromDb.status !== lc.status) {
+            unsynced.push({ student_id: sid, status: lc.status || 'Present' });
+          }
         }
-      });
+      }
+      if (unsynced.length > 0) {
+        api.post('/attendance/bulk', {
+          campus: activeCampus,
+          date: todayStr,
+          records: unsynced
+        }).catch(e => console.warn('Auto-sync attendance failed:', e));
+      }
     }
     attendanceStudents = [...allAttendanceStudents];
   } catch (err) {
@@ -272,11 +286,14 @@ function bindAttendanceMarkEvents() {
         setTimeout(() => { syncBadge.style.display = 'none'; }, 2000);
       }
     }).catch(err => {
-      console.warn('API sync queued locally:', err);
+      console.warn('API sync failed:', err);
       if (syncBadge) {
-        syncBadge.textContent = '✓ Cached Locally';
-        syncBadge.className = 'badge badge-info';
-        setTimeout(() => { syncBadge.style.display = 'none'; }, 2000);
+        syncBadge.textContent = '⚠ Sync Error';
+        syncBadge.className = 'badge badge-danger';
+        setTimeout(() => { syncBadge.style.display = 'none'; }, 3000);
+      }
+      if (window.showToast) {
+        window.showToast(`Failed to sync attendance to DB: ${err.message || 'Server error'}`, 'error');
       }
     });
   }

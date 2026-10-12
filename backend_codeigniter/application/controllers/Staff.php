@@ -9,6 +9,10 @@ class Staff extends REST_Controller {
     }
 
     public function index(): void {
+        if (strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            $this->store();
+            return;
+        }
         $campus = $this->get_active_campus();
         $staff = $this->staff_model->get_all($campus);
         $this->response($staff);

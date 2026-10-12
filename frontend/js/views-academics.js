@@ -1251,13 +1251,44 @@ let documents = [];
 async function renderDownloadCenter() {
   try {
     const res = await api.get('/downloads');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    if (Array.isArray(res?.data) && res.data.length > 0) {
       documents = res.data;
     } else if (Array.isArray(res) && res.length > 0) {
       documents = res;
     }
   } catch (e) {
     console.warn('Download center fetch fallback:', e);
+  }
+
+  // Auto-sync any locally cached documents to MySQL DB
+  if (window.SS_STORE && Array.isArray(documents)) {
+    try {
+      const localDocs = window.SS_STORE.get('downloads') || [];
+      let syncedAny = false;
+      for (const ld of localDocs) {
+        if (ld && ld.title && !documents.some(d => (d.title || '').trim().toLowerCase() === ld.title.trim().toLowerCase())) {
+          try {
+            await api.post('/downloads', {
+              title: ld.title,
+              type: ld.type || 'Study Material',
+              class_name: ld.class_name || 'All Classes',
+              file_size: ld.file_size || '2.4 MB',
+              description: ld.description || 'Academic resource'
+            });
+            syncedAny = true;
+          } catch (postErr) {
+            console.warn('Auto-sync unsaved download to DB:', postErr);
+          }
+        }
+      }
+      if (syncedAny) {
+        const refreshed = await api.get('/downloads');
+        if (Array.isArray(refreshed?.data) && refreshed.data.length > 0) documents = refreshed.data;
+        else if (Array.isArray(refreshed) && refreshed.length > 0) documents = refreshed;
+      }
+    } catch (syncErr) {
+      console.warn('Download auto-sync check error:', syncErr);
+    }
   }
 
   if (documents.length === 0) {
@@ -1482,18 +1513,26 @@ function bindDownloadCenterEvents() {
           };
 
           try {
-            await api.post('/downloads', payload);
+            const saveRes = await api.post('/downloads', payload);
+            if (saveRes?.data?.data?.id) {
+              payload.id = saveRes.data.data.id;
+            } else if (saveRes?.data?.id) {
+              payload.id = saveRes.data.id;
+            }
             const dRes = await api.get('/downloads');
-            if (Array.isArray(dRes.data) && dRes.data.length > 0) {
+            if (Array.isArray(dRes?.data) && dRes.data.length > 0) {
               documents = dRes.data;
+            } else if (Array.isArray(dRes) && dRes.length > 0) {
+              documents = dRes;
             }
           } catch (e) {
-            console.warn('Download save API fallback:', e);
-            documents.unshift({
-              id: Date.now(),
-              ...payload,
-              created_at: new Date().toISOString()
-            });
+            console.error('Download save API error:', e);
+            if (window.showToast) window.showToast(`Failed to upload document to database: ${e.message || 'Server error'}`, 'error');
+            return false;
+          }
+
+          if (window.SS_STORE) {
+            window.SS_STORE.add('downloads', payload);
           }
 
           const tbody = document.getElementById('downloads-tbody');

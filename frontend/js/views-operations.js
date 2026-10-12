@@ -51,6 +51,38 @@ async function renderLibrary() {
     if (window.SS_STORE) books = window.SS_STORE.get('books') || [];
   }
 
+  // Auto-sync any locally cached books to MySQL DB
+  if (window.SS_STORE && Array.isArray(books)) {
+    try {
+      const localBooks = window.SS_STORE.get('books') || [];
+      let syncedAny = false;
+      for (const lb of localBooks) {
+        if (lb && lb.title && !books.some(b => (b.title || '').trim().toLowerCase() === lb.title.trim().toLowerCase())) {
+          try {
+            await api.post('/library/books', {
+              title: lb.title,
+              author: lb.author || 'Unknown Author',
+              isbn: lb.isbn || null,
+              category: lb.category || 'General',
+              qty: parseInt(lb.qty) || 1,
+              rack: lb.rack || lb.rack_no || 'Rack A-01'
+            });
+            syncedAny = true;
+          } catch (postErr) {
+            console.warn('Auto-sync unsaved book to DB:', postErr);
+          }
+        }
+      }
+      if (syncedAny) {
+        const refreshed = await api.get('/library/books');
+        if (Array.isArray(refreshed?.data) && refreshed.data.length > 0) books = refreshed.data;
+        else if (Array.isArray(refreshed) && refreshed.length > 0) books = refreshed;
+      }
+    } catch (syncErr) {
+      console.warn('Book auto-sync check error:', syncErr);
+    }
+  }
+
   const totalTitles = books.length;
   const totalStock = books.reduce((acc, b) => acc + (parseInt(b.qty ?? b.total_copies) || 10), 0);
   const totalAvailable = books.reduce((acc, b) => {
@@ -498,17 +530,27 @@ function bindLibraryEvents() {
           };
 
           try {
-            await api.post('/library/books', newBook);
+            const saveRes = await api.post('/library/books', newBook);
+            if (saveRes?.data?.data?.id) newBook.id = saveRes.data.data.id;
+            else if (saveRes?.data?.id) newBook.id = saveRes.data.id;
             const bRes = await api.get('/library/books');
-            if (Array.isArray(bRes.data) && bRes.data.length > 0) {
+            if (Array.isArray(bRes?.data) && bRes.data.length > 0) {
               books = bRes.data;
+            } else if (Array.isArray(bRes) && bRes.length > 0) {
+              books = bRes;
             }
           } catch (e) {
-            console.warn('Book API save error:', e);
+            console.error('Book API save error:', e);
             if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
               if (window.showToast) window.showToast(e.message || `Duplicate entry: Book "${title}" already exists.`, 'error');
               return false;
             }
+            if (window.showToast) window.showToast(`Failed to add book to database: ${e.message || 'Server error'}`, 'error');
+            return false;
+          }
+
+          if (window.SS_STORE) {
+            window.SS_STORE.add('books', newBook);
           }
 
           const tbody = document.getElementById('books-tbody');
@@ -1234,6 +1276,35 @@ async function renderHostel() {
     console.warn('Hostels fetch fallback:', e);
   }
 
+  // Auto-sync any locally cached hostel blocks to MySQL DB
+  if (window.SS_STORE && Array.isArray(hostels)) {
+    try {
+      const localHostels = window.SS_STORE.get('hostels') || [];
+      let syncedAny = false;
+      for (const lh of localHostels) {
+        if (lh && lh.name && !hostels.some(h => (h.name || '').trim().toLowerCase() === lh.name.trim().toLowerCase())) {
+          try {
+            await api.post('/hostels', {
+              name: lh.name,
+              type: lh.type || 'Boys',
+              capacity: parseInt(lh.capacity || lh.intake) || 50
+            });
+            syncedAny = true;
+          } catch (postErr) {
+            console.warn('Auto-sync unsaved hostel to DB:', postErr);
+          }
+        }
+      }
+      if (syncedAny) {
+        const refreshed = await api.get('/hostels');
+        if (Array.isArray(refreshed?.data) && refreshed.data.length > 0) hostels = refreshed.data;
+        else if (Array.isArray(refreshed) && refreshed.length > 0) hostels = refreshed;
+      }
+    } catch (syncErr) {
+      console.warn('Hostel auto-sync check error:', syncErr);
+    }
+  }
+
   const totalCapacity = hostels.reduce((acc, h) => acc + (parseInt(h.capacity || h.intake) || 50), 0);
   const totalOccupied = hostelAllocations.length;
   const totalAvailable = Math.max(0, totalCapacity - totalOccupied);
@@ -1543,17 +1614,23 @@ function bindHostelEvents() {
           };
 
           try {
-            await api.post('/hostels', newHostel);
+            const saveRes = await api.post('/hostels', newHostel);
+            if (saveRes?.data?.data?.id) newHostel.id = saveRes.data.data.id;
+            else if (saveRes?.data?.id) newHostel.id = saveRes.data.id;
             const hRes = await api.get('/hostels');
-            if (Array.isArray(hRes.data) && hRes.data.length > 0) {
+            if (Array.isArray(hRes?.data) && hRes.data.length > 0) {
               hostels = hRes.data;
+            } else if (Array.isArray(hRes) && hRes.length > 0) {
+              hostels = hRes;
             }
           } catch (e) {
-            console.warn('Hostel API save error:', e);
+            console.error('Hostel API save error:', e);
             if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
               if (window.showToast) window.showToast(e.message || `Duplicate entry: Hostel block "${name}" already exists.`, 'error');
               return false;
             }
+            if (window.showToast) window.showToast(`Failed to register hostel in database: ${e.message || 'Server error'}`, 'error');
+            return false;
           }
 
           if (window.SS_STORE) {
@@ -1692,18 +1769,18 @@ function bindHostelEvents() {
             hostel_type: targetHostel?.type || 'Standard',
           };
 
-          let savedToApi = false;
           try {
-            await api.post('/hostels/allocate', {
+            const allocRes = await api.post('/hostels/allocate', {
               student_id: studentId,
               hostel_id: hostelId,
               room_no: roomNo,
               room_type: roomType,
               join_date: joinDate
             });
-
+            if (allocRes?.data?.data?.id) newAllocation.id = allocRes.data.data.id;
+            else if (allocRes?.data?.id) newAllocation.id = allocRes.data.id;
             const aRes = await api.get('/hostels/allocations');
-            if (Array.isArray(aRes.data) && aRes.data.length > 0) {
+            if (Array.isArray(aRes?.data) && aRes.data.length > 0) {
               hostelAllocations = aRes.data;
               savedToApi = true;
             } else if (Array.isArray(aRes) && aRes.length > 0) {
@@ -1711,15 +1788,17 @@ function bindHostelEvents() {
               savedToApi = true;
             }
           } catch (e) {
-            console.warn('Hostel allocation API error:', e);
+            console.error('Hostel allocation API error:', e);
             if (e.status === 409 || (e.message && /duplicate|already/i.test(e.message))) {
               if (window.showToast) window.showToast(e.message || 'Duplicate allocation: Student is already assigned to a hostel.', 'error');
               return false;
             }
+            if (window.showToast) window.showToast(`Failed to allocate hostel in database: ${e.message || 'Server error'}`, 'error');
+            return false;
           }
 
           if (!savedToApi) {
-            hostelAllocations.unshift(newAllocation);
+            return false;
           }
 
           if (window.SS_STORE) {

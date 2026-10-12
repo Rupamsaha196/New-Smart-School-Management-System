@@ -102,12 +102,15 @@ $route['api/timetable/(:num)']              = 'academics/destroy_timetable/$1';
 $route['api/sessions']                      = 'academics/sessions';
 $route['api/sessions/(:num)/activate']      = 'academics/activate_session/$1';
 $route['api/downloads']                     = 'academics/downloads';
+$route['api/downloads/store']               = 'academics/store_download';
 $route['api/downloads/(:num)']              = 'academics/destroy_download/$1';
 $route['api/live-classes']                  = 'academics/live_classes';
 $route['api/live-classes/(:num)']           = 'academics/destroy_live_class/$1';
 
 // ── Staff ────────────────────────────────────────────────────────────
 $route['api/staff']                         = 'staff/index';
+$route['api/staff/store']                   = 'staff/store';
+$route['api/staff/create']                  = 'staff/store';
 $route['api/staff/attendance']              = 'staff/attendance';
 $route['api/staff/attendance/bulk']         = 'staff/bulk_attendance';
 

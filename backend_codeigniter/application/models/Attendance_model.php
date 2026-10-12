@@ -36,14 +36,32 @@ class Attendance_model extends CI_Model {
         ];
     }
 
-    public function bulk_mark(string $date, array $records, ?int $class_id = null, ?string $campus = null): int {
+    public function bulk_mark(string $date, array $records, $class_id = null, ?string $campus = null): int {
         $count = 0;
         $campus_val = $campus ?: 'Kolkata Main Campus (Salt Lake Sector V)';
+        $allowed_statuses = ['Present', 'Absent', 'Late', 'Half Day', 'Holiday'];
+
         foreach ($records as $r) {
-            $student_id = $r['student_id'] ?? null;
+            $student_id = !empty($r['student_id']) ? (int)$r['student_id'] : null;
             if (!$student_id) continue;
 
-            $status = $r['status'] ?? 'Present';
+            // Verify student exists in MySQL students table to satisfy foreign key constraint
+            $st = $this->db->where('id', $student_id)->get('students')->row_array();
+            if (!$st) {
+                continue;
+            }
+
+            $raw_status = trim($r['status'] ?? 'Present');
+            $status = in_array($raw_status, $allowed_statuses) ? $raw_status : 'Present';
+
+            // Resolve valid integer class_id or null
+            $resolved_class_id = null;
+            if (!empty($class_id) && is_numeric($class_id) && (int)$class_id > 0) {
+                $resolved_class_id = (int)$class_id;
+            } elseif (!empty($st['class_id']) && is_numeric($st['class_id']) && (int)$st['class_id'] > 0) {
+                $resolved_class_id = (int)$st['class_id'];
+            }
+
             $existing = $this->db->where(['student_id' => $student_id, 'date' => $date])->get('attendances')->row_array();
 
             if ($existing) {
@@ -56,7 +74,7 @@ class Attendance_model extends CI_Model {
             } else {
                 $this->db->insert('attendances', [
                     'student_id' => $student_id,
-                    'class_id'   => $class_id,
+                    'class_id'   => $resolved_class_id,
                     'date'       => $date,
                     'status'     => $status,
                     'remark'     => $r['remark'] ?? null,

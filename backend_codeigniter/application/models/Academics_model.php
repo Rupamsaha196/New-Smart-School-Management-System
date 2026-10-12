@@ -115,16 +115,22 @@ class Academics_model extends CI_Model {
 
     public function create_download(array $data): int {
         $slug = preg_replace('/[^a-zA-Z0-9_-]/', '_', strtolower($data['title'] ?? 'doc'));
-        $clean = [
+        $fields = $this->db->list_fields('download_materials');
+        $raw = [
             'title'       => $data['title'] ?? 'Academic Resource',
             'type'        => $data['type'] ?? ($data['category'] ?? 'Study Material'),
             'class_name'  => $data['class_name'] ?? ($data['classes'] ?? 'All Classes'),
             'file_path'   => $data['file_path'] ?? ('/uploads/documents/' . $slug . '.pdf'),
             'file_size'   => $data['file_size'] ?? ($data['size'] ?? '2.4 MB'),
             'description' => $data['description'] ?? 'Curriculum download resource',
+            'campus'      => !empty($data['campus']) ? $data['campus'] : 'Kolkata Main Campus (Salt Lake Sector V)',
             'created_at'  => date('Y-m-d H:i:s'),
             'updated_at'  => date('Y-m-d H:i:s'),
         ];
+        $clean = [];
+        foreach ($raw as $k => $v) {
+            if (in_array($k, $fields)) $clean[$k] = $v;
+        }
         $this->db->insert('download_materials', $clean);
         return $this->db->insert_id();
     }

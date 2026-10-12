@@ -33,3 +33,6 @@ scratch/
 .vscode/
 *.code-workspace
 
+# ── CodeIgniter Cache ────────────────────────────────────────────────
+backend_codeigniter/application/cache/*
+!backend_codeigniter/application/cache/index.html
