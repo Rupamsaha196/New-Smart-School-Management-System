@@ -75,13 +75,14 @@ class Students extends REST_Controller {
             $roll = trim($payload['roll_no']);
             $this->db->where('roll_no', $roll);
             $this->db->where('class_id', $payload['class_id']);
-            if (!empty($payload['section'])) {
-                $this->db->where('section', $payload['section']);
+            $sec = $payload['section_id'] ?? ($payload['section'] ?? null);
+            if (!empty($sec)) {
+                $this->db->where('section_id', $sec);
             }
             $existing = $this->db->get('students')->row_array();
             if ($existing) {
-                $sec = $payload['section'] ?? 'A';
-                $this->error("Duplicate entry: Roll Number '{$roll}' is already assigned in Class {$payload['class_id']} (Section {$sec}).", 409);
+                $secName = $sec ?? 'A';
+                $this->error("Duplicate entry: Roll Number '{$roll}' is already assigned in Class {$payload['class_id']} (Section {$secName}).", 409);
                 return;
             }
         }

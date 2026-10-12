@@ -164,6 +164,8 @@ function bindClassesEvents() {
               if (idx !== -1) classList[idx] = { ...classList[idx], ...updates };
             }
 
+            if (window.broadcastDbMutation) window.broadcastDbMutation('/academics/classes', 'update');
+
             const tbody = document.getElementById('classes-tbody');
             if (tbody) tbody.innerHTML = renderClassRows(classList);
             attachRowActions();
@@ -212,6 +214,7 @@ function bindClassesEvents() {
             if (window.SS_STORE) {
               window.SS_STORE.delete('classes', id);
             }
+            if (window.broadcastDbMutation) window.broadcastDbMutation('/academics/classes', 'delete');
             const tbody = document.getElementById('classes-tbody');
             if (tbody) tbody.innerHTML = renderClassRows(classList);
             attachRowActions();
@@ -319,6 +322,7 @@ function bindClassesEvents() {
           if (window.SS_STORE) {
             window.SS_STORE.add('classes', newClass);
           }
+          if (window.broadcastDbMutation) window.broadcastDbMutation('/academics/classes', 'create');
 
           const tbody = document.getElementById('classes-tbody');
           if (tbody) tbody.innerHTML = renderClassRows(classList);

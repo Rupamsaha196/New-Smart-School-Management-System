@@ -5,7 +5,7 @@ class Student_model extends CI_Model {
 
     public function get_all(?string $search = null, ?string $class_id = null, ?string $campus = null): array {
         $this->db->select("students.*, CONCAT(TRIM(students.first_name), ' ', TRIM(students.last_name)) as name, school_classes.name as class_name", FALSE);
-        $this->db->join('school_classes', 'school_classes.id = students.class_id', 'left');
+        $this->db->join('school_classes', '(CAST(school_classes.id AS CHAR) = CAST(students.class_id AS CHAR) OR school_classes.name = students.class_id)', 'left');
         if ($search) {
             $s = $this->db->escape_like_str($search);
             $this->db->where("(students.first_name LIKE '%{$s}%' OR students.last_name LIKE '%{$s}%' OR students.admission_no LIKE '%{$s}%')", null, false);
@@ -27,7 +27,7 @@ class Student_model extends CI_Model {
         foreach ($rows as &$r) {
             $r['name'] = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
             if (empty($r['class_name']) && !empty($r['class_id'])) {
-                $r['class_name'] = 'Class ' . $r['class_id'];
+                $r['class_name'] = is_numeric($r['class_id']) ? ('Class ' . $r['class_id']) : $r['class_id'];
             }
         }
         return $rows;
@@ -35,12 +35,12 @@ class Student_model extends CI_Model {
 
     public function find(int $id): ?array {
         $this->db->select("students.*, CONCAT(TRIM(students.first_name), ' ', TRIM(students.last_name)) as name, school_classes.name as class_name", FALSE);
-        $this->db->join('school_classes', 'school_classes.id = students.class_id', 'left');
+        $this->db->join('school_classes', '(CAST(school_classes.id AS CHAR) = CAST(students.class_id AS CHAR) OR school_classes.name = students.class_id)', 'left');
         $row = $this->db->where('students.id', $id)->get('students')->row_array();
         if ($row) {
             $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
             if (empty($row['class_name']) && !empty($row['class_id'])) {
-                $row['class_name'] = 'Class ' . $row['class_id'];
+                $row['class_name'] = is_numeric($row['class_id']) ? ('Class ' . $row['class_id']) : $row['class_id'];
             }
         }
         return $row;
@@ -48,12 +48,12 @@ class Student_model extends CI_Model {
 
     public function find_by_admission_no(string $adm): ?array {
         $this->db->select("students.*, CONCAT(TRIM(students.first_name), ' ', TRIM(students.last_name)) as name, school_classes.name as class_name", FALSE);
-        $this->db->join('school_classes', 'school_classes.id = students.class_id', 'left');
+        $this->db->join('school_classes', '(CAST(school_classes.id AS CHAR) = CAST(students.class_id AS CHAR) OR school_classes.name = students.class_id)', 'left');
         $row = $this->db->where('students.admission_no', $adm)->get('students')->row_array();
         if ($row) {
             $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
             if (empty($row['class_name']) && !empty($row['class_id'])) {
-                $row['class_name'] = 'Class ' . $row['class_id'];
+                $row['class_name'] = is_numeric($row['class_id']) ? ('Class ' . $row['class_id']) : $row['class_id'];
             }
         }
         return $row;
@@ -125,7 +125,7 @@ class Student_model extends CI_Model {
         if (!$student) return null;
 
         // Class details
-        $class_row = !empty($student['class_id']) ? $this->db->where('id', $student['class_id'])->get('school_classes')->row_array() : null;
+        $class_row = !empty($student['class_id']) ? $this->db->group_start()->where('id', $student['class_id'])->or_where('name', $student['class_id'])->group_end()->get('school_classes')->row_array() : null;
 
         // Fees
         $fees = $this->db->where('student_id', $id)->get('student_fees')->result_array();

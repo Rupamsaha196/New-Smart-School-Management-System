@@ -252,10 +252,11 @@ async function renderMarksEntry() {
 
     // Build classes map: id -> name, and also store list
     marksClassesMap = {};
-    marksClassesList = cData.length > 0 ? cData : [
+    const storeClasses = (window.SS_STORE && window.SS_STORE.get('classes')) || [];
+    marksClassesList = cData.length > 0 ? cData : (storeClasses.length > 0 ? storeClasses : [
       { id: 4, name: 'Class 1' }, { id: 5, name: 'Class 5' }, { id: 6, name: 'Class 8' },
       { id: 7, name: 'Class 10' }, { id: 8, name: 'Class 11' }, { id: 9, name: 'Class 12' },
-    ];
+    ]);
     marksClassesList.forEach(c => {
       marksClassesMap[String(c.id)] = c.name;
       marksClassesMap[c.name] = c.name; // name -> name (identity lookup)

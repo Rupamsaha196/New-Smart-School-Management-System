@@ -53,6 +53,7 @@ function broadcastDbMutation(endpoint, action = 'mutation') {
     localStorage.setItem('smart_school_last_mutation', JSON.stringify({ endpoint, action, timestamp: Date.now() }));
   } catch {}
 }
+window.broadcastDbMutation = broadcastDbMutation;
 
 if (dbSyncChannel) {
   dbSyncChannel.onmessage = (event) => {
@@ -2319,7 +2320,7 @@ async function renderStudents() {
 
   try {
     const res = await api.get('/students', { campus: activeCampus });
-    if (Array.isArray(res.data)) {
+    if (Array.isArray(res.data) && res.data.length > 0) {
       allStudents = res.data;
     } else {
       allStudents = window.getLocalStudents(activeCampus);
@@ -2328,7 +2329,33 @@ async function renderStudents() {
     allStudents = window.getLocalStudents(activeCampus);
   }
 
-  const classes = [...new Set(allStudents.map(s => s.class_name || `Class ${s.class_id || 1}`))].filter(Boolean).sort();
+  // Merge any locally-saved students (from admission form) that are not already in the list
+  try {
+    const localRaw = localStorage.getItem('local_students');
+    if (localRaw) {
+      const localStudents = JSON.parse(localRaw);
+      if (Array.isArray(localStudents)) {
+        const existingIds = new Set(allStudents.map(s => String(s.id)));
+        const campusLocal = localStudents.filter(s => {
+          if (existingIds.has(String(s.id))) return false;
+          if (!s.campus) return isMain;
+          return isMain ? window.isMainCampus(s.campus) : s.campus === activeCampus;
+        });
+        if (campusLocal.length > 0) {
+          allStudents = [...campusLocal, ...allStudents];
+        }
+      }
+    }
+  } catch {}
+
+  let configuredClassNames = [];
+  try {
+    if (window.SS_STORE) {
+      configuredClassNames = (window.SS_STORE.get('classes', activeCampus) || []).map(c => c.name).filter(Boolean);
+    }
+  } catch {}
+  const studentClassNames = allStudents.map(s => s.class_name || (s.class_id ? `Class ${s.class_id}` : '')).filter(Boolean);
+  const classes = [...new Set([...configuredClassNames, ...studentClassNames])].filter(Boolean).sort();
 
   return `
     <div class="animate-fadeIn">
@@ -2544,22 +2571,113 @@ async function renderAdmission() {
     } catch {}
   }
 
-  let convertedClassId = 1;
-  if (convertedInquiry?.grade) {
-    const numMatch = convertedInquiry.grade.match(/\d+/);
-    if (numMatch) convertedClassId = parseInt(numMatch[0], 10);
+  const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
+
+  // Load configured classes dynamically from Backend API and Local Store
+  let availableClasses = [];
+  try {
+    const res = await api.get('/academics/classes', { campus: activeCampus });
+    if (Array.isArray(res?.data)) {
+      availableClasses = res.data;
+    } else if (Array.isArray(res)) {
+      availableClasses = res;
+    }
+  } catch (err) {
+    console.warn('Admission form: API fetch for classes failed, checking store:', err);
   }
 
-  const sFirstName    = student ? (student.first_name || (student.name ? student.name.split(' ')[0] : '')) : (convertedInquiry?.studentName ? convertedInquiry.studentName.split(' ')[0] : '');
-  const sLastName     = student ? (student.last_name || (student.name ? student.name.split(' ').slice(1).join(' ') : '')) : (convertedInquiry?.studentName ? convertedInquiry.studentName.split(' ').slice(1).join(' ') : '');
+  // Merge / fallback to SS_STORE
+  if (window.SS_STORE) {
+    const storeClasses = window.SS_STORE.get('classes', activeCampus) || [];
+    if (!availableClasses || availableClasses.length === 0) {
+      availableClasses = storeClasses;
+    } else {
+      storeClasses.forEach(sc => {
+        if (!availableClasses.some(c => (c.name || '').trim().toLowerCase() === (sc.name || '').trim().toLowerCase())) {
+          availableClasses.push(sc);
+        }
+      });
+    }
+  }
+
+  // Also check local_classes if stored in localStorage
+  try {
+    const localCls = JSON.parse(localStorage.getItem('local_classes') || '[]');
+    if (Array.isArray(localCls)) {
+      localCls.forEach(lc => {
+        if (!availableClasses.some(c => (c.name || '').trim().toLowerCase() === (lc.name || '').trim().toLowerCase())) {
+          availableClasses.push(lc);
+        }
+      });
+    }
+  } catch {}
+
+  // If still empty, supply default standard classes
+  if (!availableClasses || availableClasses.length === 0) {
+    availableClasses = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => ({
+      id: num,
+      name: `Class ${num}`,
+      numeric: num,
+      sections: 'A, B'
+    }));
+  }
+
+  // Determine pre-selected class
+  let selectedClassId = '';
+  if (student) {
+    if (student.class_id && availableClasses.some(c => String(c.id) === String(student.class_id))) {
+      selectedClassId = String(student.class_id);
+    } else if (student.class_name) {
+      const matched = availableClasses.find(c => (c.name || '').trim().toLowerCase() === String(student.class_name).trim().toLowerCase());
+      if (matched) selectedClassId = String(matched.id);
+    }
+    if (!selectedClassId && student.class_id) {
+      const numOnly = String(student.class_id).replace(/\D+/g, '');
+      const matched = availableClasses.find(c => String(c.numeric || c.id) === numOnly || (c.name || '').toLowerCase() === `class ${numOnly}`);
+      if (matched) selectedClassId = String(matched.id);
+    }
+  } else if (convertedInquiry?.grade) {
+    const rawGrade = String(convertedInquiry.grade).trim().toLowerCase();
+    const matched = availableClasses.find(c => {
+      const cName = (c.name || '').trim().toLowerCase();
+      return cName === rawGrade ||
+             cName.replace(/\s+/g, '') === rawGrade.replace(/\s+/g, '') ||
+             cName.includes(rawGrade) ||
+             rawGrade.includes(cName);
+    });
+    if (matched) {
+      selectedClassId = String(matched.id);
+    } else {
+      const numMatch = convertedInquiry.grade.match(/\d+/);
+      if (numMatch) {
+        const numOnly = numMatch[0];
+        const numCls = availableClasses.find(c => String(c.numeric || c.id) === numOnly || (c.name || '').toLowerCase() === `class ${numOnly}`);
+        if (numCls) selectedClassId = String(numCls.id);
+      }
+    }
+  }
+
+  if (!selectedClassId && availableClasses.length > 0) {
+    selectedClassId = String(availableClasses[0].id);
+  }
+
+  // Determine sections for the selected class
+  const selectedClassObj = availableClasses.find(c => String(c.id) === String(selectedClassId)) || availableClasses[0];
+  const classSectionsStr = (selectedClassObj?.sections || selectedClassObj?.section || 'A, B');
+  let availableSections = classSectionsStr.split(',').map(s => s.trim()).filter(Boolean);
+  if (availableSections.length === 0) availableSections = ['A', 'B', 'C', 'D'];
+
+  // Student personal details prepopulation
+  const sFirstName    = student ? (student.first_name || (student.name || '').split(' ')[0] || '') : (convertedInquiry?.studentName?.split(' ')[0] || '');
+  const sLastName     = student ? (student.last_name || (student.name || '').split(' ').slice(1).join(' ') || '') : (convertedInquiry?.studentName?.split(' ').slice(1).join(' ') || '');
   const sDob          = student ? (student.dob || student.date_of_birth || '') : '';
   const sGender       = student ? (student.gender || 'Male') : 'Male';
   const sCategory     = student ? (student.category || 'General') : 'General';
-  const sNationalId   = student ? (student.caste || student.national_id || student.aadhaar_no || '') : '';
-  const sRteQuota     = student ? (student.rte == 1 || student.rte === '1' || student.rte === 'Yes' || student.rte === true) : false;
+  const sNationalId   = student ? (student.national_id || student.caste || '') : '';
+  const sRteQuota     = student ? (student.rte === 'Yes' || student.rte_quota === true) : false;
   const sRteRegNo     = student ? (student.rte_reg_no || '') : '';
-  const sClassId      = student ? (parseInt(String(student.class_id || 1).replace(/\D+/g, ''), 10) || 1) : convertedClassId;
-  const sSection      = student ? (student.section_id || student.section || 'A') : 'A';
+
+  const sSection = student ? (student.section_id || student.section || availableSections[0] || 'A') : (availableSections[0] || 'A');
   const sRollNo       = student ? (student.roll_no || '') : '';
   const sEmail        = student ? (student.email || '') : (convertedInquiry?.email || '');
   const sPhone        = student ? (student.phone || '') : (convertedInquiry?.phone || '');
@@ -2663,15 +2781,26 @@ async function renderAdmission() {
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Enrollment Class</label>
+                <label class="form-label">Enrollment Class *</label>
                 <select id="class_id" class="form-select">
-                  ${[1,2,3,4,5,6,7,8,9,10,11,12].map(c => `<option value="${c}" ${c === sClassId ? 'selected' : ''}>Class ${c}</option>`).join('')}
+                  ${availableClasses.map(c => `
+                    <option value="${c.id}" 
+                            data-name="${String(c.name || '').replace(/"/g, '&quot;')}" 
+                            data-sections="${String(c.sections || c.section || 'A, B').replace(/"/g, '&quot;')}" 
+                            ${String(c.id) === String(selectedClassId) ? 'selected' : ''}>
+                      ${c.name}
+                    </option>
+                  `).join('')}
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Section</label>
+                <label class="form-label">Section / Stream *</label>
                 <select id="section" class="form-select">
-                  ${['A', 'B', 'C', 'D'].map(sec => `<option value="${sec}" ${sSection === sec ? 'selected' : ''}>Section ${sec}</option>`).join('')}
+                  ${availableSections.map(sec => `
+                    <option value="${String(sec).replace(/"/g, '&quot;')}" ${sec.toLowerCase() === String(sSection).toLowerCase() ? 'selected' : ''}>
+                      Section ${sec}
+                    </option>
+                  `).join('')}
                 </select>
               </div>
               <div class="form-group">
@@ -2724,7 +2853,7 @@ async function renderAdmission() {
             <h3 class="text-h3 mb-4" style="color: var(--primary-600);">Step 3: Guardian Details & Sibling Management</h3>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Father's Name</label>
+                <label class="form-label">Father's Name *</label>
                 <input type="text" id="father_name" class="form-input" placeholder="Father's full name" value="${sFatherName}" />
               </div>
               <div class="form-group">
@@ -2846,6 +2975,31 @@ function bindAdmissionEvents() {
   const prevBtn = document.getElementById('admission-prev-btn');
   const headerSaveBtn = document.getElementById('admission-header-save-btn');
   const bottomSaveBtn = document.getElementById('admission-bottom-save-btn');
+  const classSelect = document.getElementById('class_id');
+  const sectionSelect = document.getElementById('section');
+
+  // Dynamic Section Updater based on chosen Class
+  function refreshSectionsForSelectedClass() {
+    if (!classSelect || !sectionSelect) return;
+    const selectedOpt = classSelect.options[classSelect.selectedIndex];
+    if (!selectedOpt) return;
+    const secsStr = selectedOpt.getAttribute('data-sections') || 'A, B';
+    let secs = secsStr.split(',').map(s => s.trim()).filter(Boolean);
+    if (secs.length === 0) secs = ['A', 'B', 'C', 'D'];
+
+    const currentSec = sectionSelect.value;
+    sectionSelect.innerHTML = secs.map(sec => 
+      `<option value="${String(sec).replace(/"/g, '&quot;')}" ${sec.toLowerCase() === currentSec.toLowerCase() ? 'selected' : ''}>Section ${sec}</option>`
+    ).join('');
+
+    if (!secs.some(s => s.toLowerCase() === currentSec.toLowerCase()) && secs.length > 0) {
+      sectionSelect.value = secs[0];
+    }
+  }
+
+  if (classSelect) {
+    classSelect.addEventListener('change', refreshSectionsForSelectedClass);
+  }
 
   function updateSteps() {
     for (let i = 0; i < 4; i++) {
@@ -2880,10 +3034,12 @@ function bindAdmissionEvents() {
 
         const fn = document.getElementById('first_name')?.value || '';
         const ln = document.getElementById('last_name')?.value || '';
-        const cls = document.getElementById('class_id')?.value || '5';
+        const selectedOpt = classSelect?.options[classSelect.selectedIndex];
+        const selectedClassName = selectedOpt?.getAttribute('data-name') || selectedOpt?.text?.trim() || `Class ${classSelect?.value || '1'}`;
+        const selectedSec = sectionSelect?.value || 'A';
         const summary = document.getElementById('admission-summary-text');
         if (summary) {
-          summary.innerHTML = `<div><strong>Student:</strong> ${fn} ${ln}</div><div><strong>Class:</strong> Class ${cls}</div><div><strong>Status:</strong> Active enrollment</div>`;
+          summary.innerHTML = `<div><strong>Student:</strong> ${fn} ${ln}</div><div><strong>Enrolled Class:</strong> ${selectedClassName} (Section ${selectedSec})</div><div><strong>Status:</strong> Active enrollment</div>`;
         }
       } else {
         nextBtn.innerHTML = `Next Step ${icon('arrowRight', 18)}`;
@@ -2902,11 +3058,47 @@ function bindAdmissionEvents() {
   async function saveStudentData() {
     const fn = document.getElementById('first_name')?.value?.trim();
     const ln = document.getElementById('last_name')?.value?.trim();
-    if (!fn || !ln) {
-      currentAdmissionStep = 0;
+    const dobVal = document.getElementById('dob')?.value?.trim();
+    const phoneVal = document.getElementById('phone')?.value?.trim();
+    const fatherNameVal = document.getElementById('father_name')?.value?.trim();
+    const classIdVal = classSelect?.value;
+
+    // Mandatory field validation
+    const errors = [];
+    if (!fn) errors.push({ field: 'first_name', msg: 'First Name is required', step: 0 });
+    if (!ln) errors.push({ field: 'last_name', msg: 'Last Name is required', step: 0 });
+    if (!dobVal) errors.push({ field: 'dob', msg: 'Date of Birth is required', step: 0 });
+    if (!classIdVal) errors.push({ field: 'class_id', msg: 'Enrollment Class is required', step: 0 });
+    if (!phoneVal) errors.push({ field: 'phone', msg: 'Primary Mobile Phone is required', step: 1 });
+    if (!fatherNameVal) errors.push({ field: 'father_name', msg: "Father's Name is required", step: 2 });
+
+    if (errors.length > 0) {
+      // Navigate to the first step with an error
+      currentAdmissionStep = errors[0].step;
       updateSteps();
-      showToast('First Name and Last Name are required', 'warning');
-      document.getElementById('first_name')?.focus();
+
+      // Highlight all invalid fields
+      errors.forEach(e => {
+        const el = document.getElementById(e.field);
+        if (el) {
+          el.style.border = '2px solid var(--danger-500, #ef4444)';
+          el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+          el.addEventListener('input', function handler() {
+            el.style.border = '';
+            el.style.boxShadow = '';
+            el.removeEventListener('input', handler);
+          }, { once: true });
+          el.addEventListener('change', function handler() {
+            el.style.border = '';
+            el.style.boxShadow = '';
+            el.removeEventListener('change', handler);
+          }, { once: true });
+        }
+      });
+
+      const errorMsgs = errors.map(e => e.msg);
+      showToast('Please fill all mandatory fields: ' + errorMsgs.join(', '), 'warning');
+      document.getElementById(errors[0].field)?.focus();
       return;
     }
 
@@ -2927,6 +3119,11 @@ function bindAdmissionEvents() {
 
     const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
 
+    const selectedOpt = classSelect?.options[classSelect.selectedIndex];
+    const selectedClassId = classSelect?.value || '1';
+    const selectedClassName = selectedOpt?.getAttribute('data-name') || selectedOpt?.text?.trim() || `Class ${selectedClassId}`;
+    const selectedSection = sectionSelect?.value || 'A';
+
     const payload = {
       campus: activeCampus,
       first_name: fn,
@@ -2940,10 +3137,10 @@ function bindAdmissionEvents() {
       caste: document.getElementById('national_id')?.value?.trim() || '',
       rte: document.getElementById('rte_quota')?.checked ? 'Yes' : 'No',
       rte_reg_no: document.getElementById('rte_reg_no')?.value?.trim() || '',
-      class_id: document.getElementById('class_id')?.value || 1,
-      class_name: `Class ${document.getElementById('class_id')?.value || 1}`,
-      section: document.getElementById('section')?.value || 'A',
-      section_id: document.getElementById('section')?.value || 'A',
+      class_id: selectedClassId,
+      class_name: selectedClassName,
+      section: selectedSection,
+      section_id: selectedSection,
       roll_no: document.getElementById('roll_no')?.value?.trim() || '',
       email: document.getElementById('email')?.value?.trim() || '',
       phone: document.getElementById('phone')?.value?.trim() || '',
@@ -2971,15 +3168,15 @@ function bindAdmissionEvents() {
         const rollDup = existingList.find(s => 
           String(s.id) !== String(editId || '') &&
           String(s.roll_no || '').trim() === payload.roll_no &&
-          String(s.class_id || s.class_name || '') === String(payload.class_id) &&
-          String(s.section || 'A').toUpperCase() === String(payload.section).toUpperCase()
+          (String(s.class_id || '') === String(payload.class_id) || String(s.class_name || '').toLowerCase() === String(payload.class_name).toLowerCase()) &&
+          String(s.section || s.section_id || 'A').toUpperCase() === String(payload.section).toUpperCase()
         );
         if (rollDup) {
           saveButtons.forEach(b => {
             b.disabled = false;
             b.innerHTML = '<i class="fas fa-save"></i> Save Student';
           });
-          showToast(`Duplicate entry: Roll Number '${payload.roll_no}' is already assigned in Class ${payload.class_id} (${payload.section}).`, 'error');
+          showToast(`Duplicate entry: Roll Number '${payload.roll_no}' is already assigned in ${payload.class_name} (Section ${payload.section}).`, 'error');
           return;
         }
       }
@@ -3027,7 +3224,11 @@ function bindAdmissionEvents() {
         return;
       }
 
-      const local = JSON.parse(localStorage.getItem('local_students') || '[]');
+      let local = JSON.parse(localStorage.getItem('local_students') || '[]');
+      // If local_students was empty, seed it with demo data so new admission merges properly
+      if (!Array.isArray(local) || local.length === 0) {
+        local = typeof demoStudents !== 'undefined' ? [...demoStudents] : [];
+      }
       if (editId) {
         const idx = local.findIndex(s => String(s.id) === String(editId));
         if (idx !== -1) {
@@ -3037,10 +3238,11 @@ function bindAdmissionEvents() {
         showToast('Student record updated locally', 'info');
       } else {
         payload.id = Date.now();
-        payload.admission_no = `SS2025${Math.floor(100 + Math.random() * 900)}`;
+        payload.admission_no = `SS${new Date().getFullYear()}${Math.floor(100 + Math.random() * 900)}`;
+        payload.created_at = new Date().toISOString();
         local.unshift(payload);
         localStorage.setItem('local_students', JSON.stringify(local));
-        showToast('Student enrolled locally', 'info');
+        showToast('New student admitted and saved successfully!', 'success');
       }
     }
 
@@ -3055,11 +3257,57 @@ function bindAdmissionEvents() {
 
   if (nextBtn) {
     nextBtn.onclick = async () => {
+      // Step-by-step validation on "Next"
       if (currentAdmissionStep === 0) {
         const fn = document.getElementById('first_name')?.value?.trim();
         const ln = document.getElementById('last_name')?.value?.trim();
-        if (!fn || !ln) {
-          showToast('First Name and Last Name are required', 'warning');
+        const dobVal = document.getElementById('dob')?.value?.trim();
+        const stepErrors = [];
+        if (!fn) stepErrors.push('first_name');
+        if (!ln) stepErrors.push('last_name');
+        if (!dobVal) stepErrors.push('dob');
+        if (stepErrors.length > 0) {
+          stepErrors.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.style.border = '2px solid var(--danger-500, #ef4444)';
+              el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+              el.addEventListener('input', function handler() { el.style.border = ''; el.style.boxShadow = ''; }, { once: true });
+              el.addEventListener('change', function handler() { el.style.border = ''; el.style.boxShadow = ''; }, { once: true });
+            }
+          });
+          showToast('Please fill all required fields (marked with *) before proceeding', 'warning');
+          document.getElementById(stepErrors[0])?.focus();
+          return;
+        }
+      }
+
+      if (currentAdmissionStep === 1) {
+        const phoneVal = document.getElementById('phone')?.value?.trim();
+        if (!phoneVal) {
+          const el = document.getElementById('phone');
+          if (el) {
+            el.style.border = '2px solid var(--danger-500, #ef4444)';
+            el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+            el.addEventListener('input', function handler() { el.style.border = ''; el.style.boxShadow = ''; }, { once: true });
+          }
+          showToast('Primary Mobile Phone is required before proceeding', 'warning');
+          el?.focus();
+          return;
+        }
+      }
+
+      if (currentAdmissionStep === 2) {
+        const fNameVal = document.getElementById('father_name')?.value?.trim();
+        if (!fNameVal) {
+          const el = document.getElementById('father_name');
+          if (el) {
+            el.style.border = '2px solid var(--danger-500, #ef4444)';
+            el.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+            el.addEventListener('input', function handler() { el.style.border = ''; el.style.boxShadow = ''; }, { once: true });
+          }
+          showToast("Father's Name is required before proceeding", 'warning');
+          el?.focus();
           return;
         }
       }

@@ -2187,12 +2187,9 @@ async function renderFrontWebsite() {
               <div class="form-group">
                 <label class="form-label">Applying for Grade</label>
                 <select class="form-select" id="inq-grade">
-                  <option value="Pre-Primary / Nursery">Pre-Primary / Nursery</option>
-                  <option value="Class 1">Class 1</option>
-                  <option value="Class 5" selected>Class 5</option>
-                  <option value="Class 9">Class 9</option>
-                  <option value="Class 11 Science">Class 11 Science</option>
-                  <option value="Class 11 Commerce">Class 11 Commerce</option>
+                  ${(typeof getAdmissionGradesList === 'function' ? getAdmissionGradesList() : [
+                    'Pre-Primary / Nursery', 'Class 1', 'Class 5', 'Class 9', 'Class 11 Science', 'Class 11 Commerce'
+                  ]).map(g => `<option value="${g}" ${g === 'Class 5' ? 'selected' : ''}>${g}</option>`).join('')}
                 </select>
               </div>
             </div>

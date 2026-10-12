@@ -34,16 +34,19 @@ class Academics extends REST_Controller {
 
         $teacher = !empty($p['class_teacher']) ? $p['class_teacher'] : ($this->input->post('class_teacher') ?: 'Assigned Faculty');
         $sections = !empty($p['sections']) ? $p['sections'] : (!empty($p['section']) ? $p['section'] : ($this->input->post('sections') ?: ($this->input->post('section') ?: 'A, B')));
-        $this->db->insert('school_classes', [
+        $fee = !empty($p['tuition_fee']) ? (float)$p['tuition_fee'] : (!empty($p['fee']) ? (float)$p['fee'] : 12000);
+        $insertData = [
             'name'          => $name,
             'sections'      => $sections,
             'class_teacher' => $teacher,
+            'tuition_fee'   => $fee,
             'campus'        => $campus,
             'created_at'    => date('Y-m-d H:i:s'),
             'updated_at'    => date('Y-m-d H:i:s'),
-        ]);
+        ];
+        $this->db->insert('school_classes', $insertData);
         $id = $this->db->insert_id();
-        $this->success(['id' => $id, 'name' => $name], 'Class created successfully', 201);
+        $this->success(['id' => $id, 'name' => $name, 'sections' => $sections, 'class_teacher' => $teacher], 'Class created successfully', 201);
     }
 
     public function destroy_class(int $id): void {
