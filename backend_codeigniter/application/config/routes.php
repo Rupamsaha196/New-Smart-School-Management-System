@@ -84,10 +84,14 @@ $route['api/exams/(:num)/admit-card']       = 'exams/admit_card/$1';
 
 // ── Academics ────────────────────────────────────────────────────────
 $route['api/academics/classes']             = 'academics/classes';
-$route['api/academics/classes/(:num)']      = 'academics/destroy_class/$1';
+$route['api/academics/classes/store']       = 'academics/store_class';
+$route['api/academics/classes/(:num)']      = 'academics/class_detail/$1';
 $route['api/classes']                       = 'academics/classes';
+$route['api/classes/store']                 = 'academics/store_class';
+$route['api/classes/(:num)']                = 'academics/class_detail/$1';
 $route['api/school-classes']                = 'academics/classes';
-$route['api/classes/(:num)']                = 'academics/destroy_class/$1';
+$route['api/school-classes/store']         = 'academics/store_class';
+$route['api/school-classes/(:num)']        = 'academics/class_detail/$1';
 $route['api/academics/subjects']            = 'academics/subjects';
 $route['api/academics/subjects/(:num)']     = 'academics/destroy_subject/$1';
 $route['api/subjects']                      = 'academics/subjects';

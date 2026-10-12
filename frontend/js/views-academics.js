@@ -12,7 +12,7 @@ async function renderClasses() {
   const activeCampus = (typeof window.getActiveCampus === 'function') ? window.getActiveCampus() : 'Kolkata Main Campus (Salt Lake Sector V)';
   try {
     const res = await api.get('/academics/classes', { campus: activeCampus });
-    if (Array.isArray(res.data)) {
+    if (Array.isArray(res?.data)) {
       classList = res.data;
     } else if (Array.isArray(res)) {
       classList = res;
@@ -22,6 +22,37 @@ async function renderClasses() {
   } catch (err) {
     console.warn('Classes central DB sync fallback:', err);
     if (window.SS_STORE) classList = window.SS_STORE.get('classes', activeCampus);
+  }
+
+  // Self-heal / Auto-sync: Ensure any classes created locally in SS_STORE (e.g. Class 2) are synced to MySQL DB
+  if (window.SS_STORE && Array.isArray(classList)) {
+    try {
+      const localClasses = window.SS_STORE.get('classes', activeCampus) || [];
+      let syncedAny = false;
+      for (const lc of localClasses) {
+        if (lc && lc.name && !classList.some(c => (c.name || '').trim().toLowerCase() === lc.name.trim().toLowerCase())) {
+          try {
+            await api.post('/academics/classes', {
+              name: lc.name,
+              class_teacher: lc.class_teacher || 'Assigned Faculty',
+              sections: lc.section || lc.sections || 'A, B',
+              tuition_fee: lc.tuition_fee || 12000,
+              campus: activeCampus
+            });
+            syncedAny = true;
+          } catch (postErr) {
+            console.warn('Auto-sync unsaved class to DB:', postErr);
+          }
+        }
+      }
+      if (syncedAny) {
+        const refreshed = await api.get('/academics/classes', { campus: activeCampus });
+        if (Array.isArray(refreshed?.data)) classList = refreshed.data;
+        else if (Array.isArray(refreshed)) classList = refreshed;
+      }
+    } catch (syncErr) {
+      console.warn('Class auto-sync check error:', syncErr);
+    }
   }
 
   return `
@@ -156,6 +187,16 @@ function bindClassesEvents() {
             const strength = parseInt(document.getElementById('modal-class-strength').value) || 0;
 
             const updates = { name, numeric, section, class_teacher: teacher, tuition_fee: fee, students_count: strength };
+            try {
+              await api.put('/academics/classes/' + id, {
+                name,
+                sections: section,
+                class_teacher: teacher,
+                tuition_fee: fee
+              });
+            } catch (err) {
+              console.warn('Class update API fallback:', err);
+            }
             if (window.SS_STORE) {
               window.SS_STORE.update('classes', id, updates);
               classList = window.SS_STORE.get('classes');
@@ -306,17 +347,33 @@ function bindClassesEvents() {
           };
 
           try {
-            await api.post('/academics/classes', { name, class_teacher: teacher, sections: section, numeric, campus: activeCampus });
+            const saveRes = await api.post('/academics/classes', {
+              name,
+              class_teacher: teacher,
+              sections: section,
+              tuition_fee: fee,
+              numeric,
+              campus: activeCampus
+            });
+            if (saveRes?.data?.data?.id) {
+              newClass.id = saveRes.data.data.id;
+            } else if (saveRes?.data?.id) {
+              newClass.id = saveRes.data.id;
+            }
             const clRes = await api.get('/academics/classes', { campus: activeCampus });
-            if (Array.isArray(clRes.data)) {
+            if (Array.isArray(clRes?.data)) {
               classList = clRes.data;
+            } else if (Array.isArray(clRes)) {
+              classList = clRes;
             }
           } catch (e) {
-            console.warn('Class API save error:', e);
+            console.error('Class API save error:', e);
             if (e.status === 409 || (e.message && /duplicate/i.test(e.message))) {
               if (window.showToast) window.showToast(e.message || `Duplicate entry: Class "${name}" already exists.`, 'error');
               return false;
             }
+            if (window.showToast) window.showToast(`Failed to save class to database: ${e.message || 'Server error'}`, 'error');
+            return false;
           }
 
           if (window.SS_STORE) {

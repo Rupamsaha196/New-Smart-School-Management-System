@@ -25,8 +25,61 @@ class Academics_model extends CI_Model {
             }
             $c['students_count'] = $this->db->count_all_results('students');
             $c['section'] = $c['sections'] ?? 'A, B';
+            $c['numeric'] = (int)preg_replace('/\D/', '', $c['name']) ?: 0;
+            $c['tuition_fee'] = isset($c['tuition_fee']) ? (float)$c['tuition_fee'] : 12000.00;
         }
         return $classes;
+    }
+
+    public function create_class(array $data): int {
+        // 1. Self-healing runtime schema check for tuition_fee column
+        try {
+            $has_fee = $this->db->query("SHOW COLUMNS FROM `school_classes` LIKE 'tuition_fee'")->row_array();
+            if (!$has_fee) {
+                $this->db->query("ALTER TABLE `school_classes` ADD COLUMN `tuition_fee` DECIMAL(10,2) NULL DEFAULT 12000.00 AFTER `class_teacher`");
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Schema self-healing warning: ' . $e->getMessage());
+        }
+
+        // 2. Introspect existing table fields to prevent column not found errors
+        $fields = $this->db->list_fields('school_classes');
+        $clean = [];
+        foreach ($data as $key => $value) {
+            if (in_array($key, $fields)) {
+                $clean[$key] = $value;
+            }
+        }
+
+        if (!isset($clean['created_at']) && in_array('created_at', $fields)) {
+            $clean['created_at'] = date('Y-m-d H:i:s');
+        }
+        if (!isset($clean['updated_at']) && in_array('updated_at', $fields)) {
+            $clean['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        $this->db->insert('school_classes', $clean);
+        return (int)$this->db->insert_id();
+    }
+
+    public function update_class(int $id, array $data): bool {
+        // Introspect existing table fields to prevent column not found errors
+        $fields = $this->db->list_fields('school_classes');
+        $clean = [];
+        foreach ($data as $key => $value) {
+            if (in_array($key, $fields)) {
+                $clean[$key] = $value;
+            }
+        }
+        if (in_array('updated_at', $fields)) {
+            $clean['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        if (empty($clean)) {
+            return false;
+        }
+
+        return $this->db->where('id', $id)->update('school_classes', $clean);
     }
 
     public function get_subjects(): array {

@@ -10,9 +10,34 @@ class Academics extends REST_Controller {
     }
 
     public function classes(): void {
+        if (strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            $this->store_class();
+            return;
+        }
         $campus = $this->get_active_campus();
         $classes = $this->academics_model->get_classes($campus);
         $this->response($classes);
+    }
+
+    public function class_detail(int $id): void {
+        $verb = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+        if ($verb === 'DELETE') {
+            $this->destroy_class($id);
+            return;
+        }
+        if ($verb === 'PUT' || $verb === 'PATCH' || $verb === 'POST') {
+            $this->update_class($id);
+            return;
+        }
+        $row = $this->db->where('id', $id)->get('school_classes')->row_array();
+        if (!$row) {
+            $this->not_found('Class not found');
+            return;
+        }
+        $row['section'] = $row['sections'] ?? 'A, B';
+        $row['numeric'] = (int)preg_replace('/\D/', '', $row['name']) ?: 0;
+        $row['tuition_fee'] = isset($row['tuition_fee']) ? (float)$row['tuition_fee'] : 12000.00;
+        $this->response($row);
     }
 
     public function store_class(): void {
@@ -35,18 +60,43 @@ class Academics extends REST_Controller {
         $teacher = !empty($p['class_teacher']) ? $p['class_teacher'] : ($this->input->post('class_teacher') ?: 'Assigned Faculty');
         $sections = !empty($p['sections']) ? $p['sections'] : (!empty($p['section']) ? $p['section'] : ($this->input->post('sections') ?: ($this->input->post('section') ?: 'A, B')));
         $fee = !empty($p['tuition_fee']) ? (float)$p['tuition_fee'] : (!empty($p['fee']) ? (float)$p['fee'] : 12000);
+        $room = !empty($p['room_no']) ? (int)$p['room_no'] : null;
+
         $insertData = [
             'name'          => $name,
             'sections'      => $sections,
             'class_teacher' => $teacher,
             'tuition_fee'   => $fee,
+            'room_no'       => $room,
             'campus'        => $campus,
             'created_at'    => date('Y-m-d H:i:s'),
             'updated_at'    => date('Y-m-d H:i:s'),
         ];
-        $this->db->insert('school_classes', $insertData);
-        $id = $this->db->insert_id();
-        $this->success(['id' => $id, 'name' => $name, 'sections' => $sections, 'class_teacher' => $teacher], 'Class created successfully', 201);
+        $id = $this->academics_model->create_class($insertData);
+        $this->success([
+            'id'            => $id,
+            'name'          => $name,
+            'sections'      => $sections,
+            'section'       => $sections,
+            'class_teacher' => $teacher,
+            'tuition_fee'   => $fee,
+            'campus'        => $campus
+        ], 'Class created successfully', 201);
+    }
+
+    public function update_class(int $id): void {
+        $p = $this->get_payload();
+        $updateData = [];
+        if (isset($p['name'])) $updateData['name'] = trim($p['name']);
+        if (isset($p['sections'])) $updateData['sections'] = trim($p['sections']);
+        elseif (isset($p['section'])) $updateData['sections'] = trim($p['section']);
+        if (isset($p['class_teacher'])) $updateData['class_teacher'] = trim($p['class_teacher']);
+        if (isset($p['tuition_fee'])) $updateData['tuition_fee'] = (float)$p['tuition_fee'];
+        elseif (isset($p['fee'])) $updateData['tuition_fee'] = (float)$p['fee'];
+        if (isset($p['room_no'])) $updateData['room_no'] = (int)$p['room_no'];
+
+        $this->academics_model->update_class($id, $updateData);
+        $this->success(null, 'Class updated successfully');
     }
 
     public function destroy_class(int $id): void {
