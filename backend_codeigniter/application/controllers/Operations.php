@@ -222,15 +222,68 @@ class Operations extends REST_Controller {
         }
 
         $student_id = (int)$payload['student_id'];
+        $hostel_id  = (int)$payload['hostel_id'];
+
+        // Verify student existence
+        $student = $this->db->where('id', $student_id)->get('students')->row_array();
+        if (!$student) {
+            $this->error('Student not found in the database', 404);
+            return;
+        }
+
+        // Verify hostel existence
+        $hostel = $this->db->where('id', $hostel_id)->get('hostels')->row_array();
+        if (!$hostel) {
+            $this->error('Hostel wing not found in the database', 404);
+            return;
+        }
+
+        // Gender segregation enforcement
+        $student_gender = strtolower(trim($student['gender'] ?? ''));
+        $hostel_type    = strtolower(trim($hostel['type'] ?? ''));
+        $st_name        = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+
+        if ($hostel_type === 'boys' && $student_gender === 'female') {
+            $this->error("Gender mismatch: Cannot allocate female student ({$st_name}) to Boys Hostel ({$hostel['name']}). Please select a Girls or Co-Ed wing.", 422);
+            return;
+        }
+        if ($hostel_type === 'girls' && $student_gender === 'male') {
+            $this->error("Gender mismatch: Cannot allocate male student ({$st_name}) to Girls Hostel ({$hostel['name']}). Please select a Boys or Co-Ed wing.", 422);
+            return;
+        }
+
+        // Check active duplicate allocation
         $existing = $this->db->where('student_id', $student_id)
                              ->where("(leave_date IS NULL OR leave_date >= '" . date('Y-m-d') . "')", null, false)
                              ->get('student_hostels')->row_array();
         if ($existing) {
-            $this->error("Duplicate allocation: Student is already actively assigned to a hostel room.", 409);
+            $this->error("Duplicate allocation: Student {$st_name} is already actively assigned to a hostel room.", 409);
             return;
         }
 
+        // Check room capacity if room number is specified
+        $room_no = trim($payload['room_no'] ?? '');
+        if (!empty($room_no)) {
+            $existing_room = $this->db->where('hostel_id', $hostel_id)
+                                      ->where('room_no', $room_no)
+                                      ->get('hostel_rooms')->row_array();
+            if ($existing_room) {
+                $room_cap = (int)($existing_room['capacity'] ?? 2);
+                $occupied = $this->db->where('room_id', $existing_room['id'])
+                                     ->where("(leave_date IS NULL OR leave_date >= '" . date('Y-m-d') . "')", null, false)
+                                     ->count_all_results('student_hostels');
+                if ($occupied >= $room_cap) {
+                    $this->error("Room '{$room_no}' in {$hostel['name']} has reached maximum capacity ({$occupied}/{$room_cap} beds occupied). Please select another room.", 422);
+                    return;
+                }
+            }
+        }
+
         $id = $this->ops->allocate_student($payload);
+        if (!$id) {
+            $this->error('Failed to record student hostel allocation in the database.', 500);
+            return;
+        }
         $this->success(['id' => $id], 'Student allocated to hostel block successfully', 201);
     }
 

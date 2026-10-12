@@ -256,16 +256,35 @@ class Operations_model extends CI_Model {
             if ($existing) {
                 $room_id = (int)$existing['id'];
             } else {
+                $type_cap_map = [
+                    'Single'         => 1,
+                    'Double Sharing' => 2,
+                    'Triple Sharing' => 3,
+                    'Dormitory'      => 4
+                ];
+                $cap = (int)($data['capacity'] ?? ($type_cap_map[$data['room_type'] ?? ''] ?? 2));
                 $this->db->insert('hostel_rooms', [
                     'hostel_id'  => $hostel_id,
                     'room_no'    => $data['room_no'],
                     'type'       => $data['room_type'] ?? 'Standard',
-                    'capacity'   => (int)($data['capacity'] ?? 2),
+                    'capacity'   => $cap,
                     'fee'        => (float)($data['fee'] ?? 5000),
                     'created_at' => date('Y-m-d H:i:s'),
                     'updated_at' => date('Y-m-d H:i:s'),
                 ]);
                 $room_id = $this->db->insert_id();
+            }
+        }
+
+        if ($room_id) {
+            $occupied = $this->db->where('room_id', $room_id)
+                                 ->where("(leave_date IS NULL OR leave_date >= '" . date('Y-m-d') . "')", null, false)
+                                 ->count_all_results('student_hostels');
+            $r_info = $this->db->where('id', $room_id)->get('hostel_rooms')->row_array();
+            $r_cap = (int)($r_info['capacity'] ?? 2);
+            if ($occupied >= $r_cap) {
+                log_message('error', "Cannot allocate student {$student_id}: room {$r_info['room_no']} is full ({$occupied}/{$r_cap} beds)");
+                return 0;
             }
         }
 

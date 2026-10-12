@@ -1665,21 +1665,33 @@ function bindHostelEvents() {
         if (window.SS_STORE) studentList = window.SS_STORE.get('students') || [];
       }
 
+      const getStudentGender = (s) => (s.gender || 'Male');
       const studentOptions = studentList.map(s => {
         const sName = ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || s.name || `Student #${s.id}`;
+        const gender = getStudentGender(s);
         return `
-          <option value="${s.id}">${sName} (${s.admission_no || 'ID:#' + s.id}) - ${s.class_name || s.class || 'Class 10'}</option>
+          <option value="${s.id}" data-gender="${gender}">${sName} (${gender}) · ${s.admission_no || 'ID:#' + s.id} (${s.class_name || s.class || 'Class 10'})</option>
         `;
       }).join('');
 
-      const hostelOptions = hostels.map(h => {
-        const allocatedCount = (hostelAllocations || []).filter(a => String(a.hostel_id) === String(h.id)).length;
-        const cap = parseInt(h.capacity || h.intake) || 50;
-        const free = Math.max(0, cap - allocatedCount);
-        return `
-          <option value="${h.id}">${h.name} (${h.type} Hostel) — ${free} Free Beds left</option>
-        `;
-      }).join('');
+      const renderHostelSelectOptions = (selectedGender) => {
+        const normGender = (selectedGender || 'Male').toLowerCase();
+        return hostels.map(h => {
+          const allocatedCount = (hostelAllocations || []).filter(a => String(a.hostel_id) === String(h.id)).length;
+          const cap = parseInt(h.capacity || h.intake) || 50;
+          const free = Math.max(0, cap - allocatedCount);
+          const hType = (h.type || 'Standard').toLowerCase();
+          const isMismatch = (normGender === 'female' && hType === 'boys') || (normGender === 'male' && hType === 'girls');
+          const disabledAttr = isMismatch ? 'disabled' : '';
+          const statusText = isMismatch ? ` [${h.type} Hostel Only]` : ` (${h.type} Wing) — ${free} Free Beds`;
+          return `
+            <option value="${h.id}" ${disabledAttr}>${h.name}${statusText}</option>
+          `;
+        }).join('');
+      };
+
+      const initialGender = studentList[0] ? getStudentGender(studentList[0]) : 'Male';
+      const initialHostelOptions = renderHostelSelectOptions(initialGender);
 
       window.openAppModal({
         title: 'Allocate Student to Hostel Room',
@@ -1697,19 +1709,20 @@ function bindHostelEvents() {
             <div class="form-group">
               <label class="form-label">Select Hostel Wing *</label>
               <select class="form-select" id="modal-alloc-hostel" required>
-                ${hostelOptions || '<option value="" disabled selected>No hostels configured (Add hostel block first)</option>'}
+                ${initialHostelOptions || '<option value="" disabled selected>No hostels configured (Add hostel block first)</option>'}
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Assigned Room Number *</label>
-              <input type="text" class="form-input" id="modal-alloc-room" placeholder="e.g. Room A-204" value="Room A-204" required />
+              <input type="text" class="form-input" id="modal-alloc-room" placeholder="e.g. Room 101, Room A-102" value="" required />
+              <div class="text-xs text-secondary mt-1">Assign an individual room number. Capacity is strictly tracked per room.</div>
             </div>
             <div class="form-group">
               <label class="form-label">Room Type</label>
               <select class="form-select" id="modal-alloc-room-type">
-                <option value="Single">Single Occupancy</option>
-                <option value="Double Sharing" selected>Double Sharing</option>
-                <option value="Triple Sharing">Triple Sharing</option>
+                <option value="Single">Single Occupancy (1 Bed)</option>
+                <option value="Double Sharing" selected>Double Sharing (2 Beds)</option>
+                <option value="Triple Sharing">Triple Sharing (3 Beds)</option>
                 <option value="Dormitory">Dormitory (4+ Beds)</option>
               </select>
             </div>
@@ -1720,6 +1733,7 @@ function bindHostelEvents() {
           </div>
         `,
         onSave: async () => {
+          let savedToApi = false;
           const rawStudent = document.getElementById('modal-alloc-student')?.value;
           const rawHostel = document.getElementById('modal-alloc-hostel')?.value;
           if (!rawStudent || !rawHostel) {
@@ -1728,7 +1742,11 @@ function bindHostelEvents() {
           }
           const studentId = parseInt(rawStudent);
           const hostelId = parseInt(rawHostel);
-          const roomNo = document.getElementById('modal-alloc-room').value.trim() || 'Room 101';
+          const roomNo = document.getElementById('modal-alloc-room').value.trim();
+          if (!roomNo) {
+            if (window.showToast) window.showToast('Please specify a Room Number (e.g. Room 101, Room 204)', 'warning');
+            return false;
+          }
           const roomType = document.getElementById('modal-alloc-room-type').value;
           const joinDate = document.getElementById('modal-alloc-date').value || new Date().toISOString().split('T')[0];
 
@@ -1748,9 +1766,30 @@ function bindHostelEvents() {
             return false;
           }
 
-          // Gather student details for immediate display
+          // Gather student details for validation & display
           const stObj = studentList.find(s => String(s.id) === String(studentId)) || {};
           const studentName = ((stObj.first_name || '') + ' ' + (stObj.last_name || '')).trim() || stObj.name || `Student #${studentId}`;
+          const stGender = (stObj.gender || 'Male').toLowerCase();
+          const hostelType = (targetHostel?.type || '').toLowerCase();
+
+          // Enforce gender segregation
+          if (hostelType === 'boys' && stGender === 'female') {
+            if (window.showToast) window.showToast(`Cannot allocate female student (${studentName}) to Boys Hostel (${targetHostel?.name}). Please select a Girls or Co-Ed wing.`, 'error');
+            return false;
+          }
+          if (hostelType === 'girls' && stGender === 'male') {
+            if (window.showToast) window.showToast(`Cannot allocate male student (${studentName}) to Girls Hostel (${targetHostel?.name}). Please select a Boys or Co-Ed wing.`, 'error');
+            return false;
+          }
+
+          // Enforce room-level bed capacity
+          const maxBedsMap = { 'Single': 1, 'Double Sharing': 2, 'Triple Sharing': 3, 'Dormitory': 4 };
+          const maxBeds = maxBedsMap[roomType] || 2;
+          const currentInRoom = hostelAllocations.filter(a => String(a.hostel_id) === String(hostelId) && (a.room_no || '').trim().toLowerCase() === roomNo.toLowerCase()).length;
+          if (currentInRoom >= maxBeds) {
+            if (window.showToast) window.showToast(`Room '${roomNo}' is already at full capacity (${currentInRoom}/${maxBeds} beds occupied). Please assign another room or select a different room type.`, 'warning');
+            return false;
+          }
 
           const newAllocation = {
             id: Date.now(),
@@ -1829,6 +1868,23 @@ function bindHostelEvents() {
           return true;
         }
       });
+
+      // Attach dynamic student change listener to auto-filter hostel wings by gender
+      setTimeout(() => {
+        const studentSelect = document.getElementById('modal-alloc-student');
+        const hostelSelect = document.getElementById('modal-alloc-hostel');
+        if (studentSelect && hostelSelect) {
+          studentSelect.addEventListener('change', () => {
+            const chosenId = studentSelect.value;
+            const chosenSt = studentList.find(s => String(s.id) === String(chosenId));
+            const gen = chosenSt ? getStudentGender(chosenSt) : 'Male';
+            hostelSelect.innerHTML = renderHostelSelectOptions(gen);
+            // Select first non-disabled option
+            const firstValid = Array.from(hostelSelect.options).find(opt => !opt.disabled);
+            if (firstValid) hostelSelect.value = firstValid.value;
+          });
+        }
+      }, 50);
     };
   }
 }

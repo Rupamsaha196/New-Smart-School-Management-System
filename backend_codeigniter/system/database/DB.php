@@ -38,22 +38,35 @@ function &DB($params = '', bool $query_builder_override = NULL) {
             PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
         ];
 
-        // For remote cloud MySQL or if DB_SSL is requested, configure CA bundle
+        // For remote cloud MySQL / TiDB Cloud or if DB_SSL is requested, configure CA bundle
         $is_local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', 'db']) && (getenv('DB_SSL') !== 'true');
         if (!$is_local || getenv('DB_SSL') === 'true') {
-            $ca_bundle = '/etc/ssl/certs/ca-certificates.crt';
-            if (file_exists($ca_bundle)) {
-                $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $ca_bundle;
-            } elseif (file_exists('/etc/pki/tls/certs/ca-bundle.crt')) {
-                $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/pki/tls/certs/ca-bundle.crt';
+            $ca_candidates = [
+                '/etc/ssl/certs/ca-certificates.crt',
+                '/etc/pki/tls/certs/ca-bundle.crt',
+                ini_get('openssl.cafile'),
+                ini_get('curl.cainfo'),
+                'C:/laragon/etc/ssl/cacert.pem',
+                'C:/xampp/apache/bin/curl-ca-bundle.crt',
+            ];
+            foreach ($ca_candidates as $cand) {
+                if (!empty($cand) && file_exists($cand)) {
+                    $pdo_options[PDO::MYSQL_ATTR_SSL_CA] = $cand;
+                    break;
+                }
             }
             if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+                // TiDB Cloud recommends allowing self-signed or intermediate chain verification
                 $pdo_options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
             }
         }
 
         $pdo = new PDO($dsn, $username, $password, $pdo_options);
     } catch (PDOException $e) {
+        error_log("[SMART_SCHOOL_DB_ERROR] PDO Connection Failed to {$host}:{$port}/{$database} - " . $e->getMessage());
+        if (function_exists('log_message')) {
+            log_message('error', "Database connection failed ({$host}:{$port}): " . $e->getMessage());
+        }
         // Fallback to SQLite if local MySQL is temporarily unavailable
         $sqlite_file = APPPATH . '../database/database.sqlite';
         if (file_exists($sqlite_file)) {
